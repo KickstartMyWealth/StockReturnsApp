@@ -1,0 +1,33 @@
+name: Refresh market data
+
+on:
+  schedule:
+    # 22:15 UTC = 5:15pm ET during daylight saving (6:15pm ET in winter).
+    # Runs Mon-Fri after the US market close so data.json holds today's close.
+    - cron: "15 22 * * 1-5"
+  workflow_dispatch: {} # lets you trigger a refresh manually from the Actions tab
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Fetch latest market data
+        run: node fetch-data.mjs
+
+      - name: Commit updated data.json
+        run: |
+          git config user.name "market-data-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data.json
+          git diff --cached --quiet || git commit -m "Market close data $(date -u +%F)"
+          git push
+
