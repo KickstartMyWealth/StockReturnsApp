@@ -1,26 +1,52 @@
 // Fetches EOD data at market close and writes data.json for the app.
 // Run by GitHub Actions (see .github/workflows/refresh-data.yml). Node 20+.
+// v2: Yahoo chart API primary (Stooq blocks datacenter IPs), corrected screener endpoint.
 
 import { writeFileSync } from "node:fs";
 
 const UNIQUE_TICKERS = [
-  // Country ETFs
   "EWJ","EWA","EWC","EWG","EWQ","EWI","EWL","EWN","EWO","EWK","EWD","EWP","EWU",
   "EIS","EWS","EWH","EDEN","EFNL","EIRL","ENOR","ENZL","EWY","EWZ","EWW","EWT",
   "EZA","INDA","MCHI","FXI","THD","TUR","EPOL","ECH","EPU","EIDO","EPHE","ICOL",
   "EWM","KSA","QAT","UAE",
-  // Sector ETFs
   "XLK","XLF","XLE","XLV","XLY","XLP","XLI","XLU","XLB","XLRE",
-  // Foundation families
   "SCHB","SCHX","SCHG","SCHV","SCHM","SCHA","SCHH","SCHF","SCHC","SCHE","SCHP","SCHO","SCHR",
   "VTI","VV","VUG","VTV","VO","VB","VNQ","VEA","VSS","VWO",
   "IWV","IVV","IVW","IVE","IJH","IJR","IYR","EFA","SCZ","EEM","TIP","SHY","IEI"
 ];
 
+const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36";
+const YAHOO = t => `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(t)}?range=1y&interval=1d`;
 const STOOQ = t => `https://stooq.com/q/d/l/?s=${t.toLowerCase()}.us&i=d`;
-const CLUB_URL = "https://stockanalysis.com/api/screener/s/f?m=chYTD&s=desc&c=s,n,price,chYTD&cn=500";
+const CLUB_URL = "https://stockanalysis.com/_api/endpoints/screener/data-points?type=s&ids=chYTD+price";
 
-function parseHistory(csv) {
+async function fetchJSON(url) {
+  const res = await fetch(url, { headers: { "User-Agent": UA, "Accept": "application/json" } });
+  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+  return res.json();
+}
+async function fetchText(url) {
+  const res = await fetch(url, { headers: { "User-Agent": UA } });
+  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+  return res.text();
+}
+
+// ---- Price history: Yahoo primary, Stooq fallback ----
+async function historyYahoo(t) {
+  const j = await fetchJSON(YAHOO(t));
+  const r = j?.chart?.result?.[0];
+  const ts = r?.timestamp || [];
+  const closes = r?.indicators?.quote?.[0]?.close || [];
+  const out = [];
+  for (let i = 0; i < ts.length; i++) {
+    const c = closes[i];
+    if (c != null && Number.isFinite(c)) {
+      out.push({ d: new Date(ts[i] * 1000).toISOString().slice(0, 10), c });
+    }
+  }
+  return out;
+}
+function parseStooqCSV(csv) {
   const lines = csv.trim().split("\n");
   const out = [];
   for (let i = 1; i < lines.length; i++) {
@@ -29,6 +55,11 @@ function parseHistory(csv) {
     if (p[0] && Number.isFinite(close)) out.push({ d: p[0], c: close });
   }
   return out;
+}
+async function history(t) {
+  try { const h = await historyYahoo(t); if (h.length > 20) return h; } catch {}
+  try { const h = parseStooqCSV(await fetchText(STOOQ(t))); if (h.length > 20) return h; } catch {}
+  return null;
 }
 
 function computeReturns(hist) {
@@ -46,7 +77,7 @@ function computeReturns(hist) {
   const pct = base => (base > 0 ? +(((last.c / base) - 1) * 100).toFixed(2) : null);
   return {
     asOf: last.d,
-    price: last.c,
+    price: +last.c.toFixed(2),
     "1M": pct(closeOnOrBefore(minusMonths(1))),
     "2M": pct(closeOnOrBefore(minusMonths(2))),
     "3M": pct(closeOnOrBefore(minusMonths(3))),
@@ -55,40 +86,32 @@ function computeReturns(hist) {
   };
 }
 
-async function fetchText(url) {
-  const res = await fetch(url, { headers: { "User-Agent": "fund-ledger-refresh/1.0" } });
-  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-  return res.text();
-}
-
 async function main() {
   const returns = {};
   let failed = 0;
 
-  // Modest concurrency to be polite to Stooq.
   const queue = [...UNIQUE_TICKERS];
   await Promise.all(Array.from({ length: 5 }, async () => {
     while (queue.length) {
       const t = queue.shift();
-      try {
-        const r = computeReturns(parseHistory(await fetchText(STOOQ(t))));
-        if (r) returns[t] = r; else failed++;
-      } catch { failed++; }
+      const h = await history(t);
+      const r = h ? computeReturns(h) : null;
+      if (r) returns[t] = r; else { failed++; console.warn("no data for", t); }
+      await new Promise(res => setTimeout(res, 150)); // be polite
     }
   }));
 
+  // ---- 100%+ Club: whole-market screen, YTD > 100%, price >= $1 ----
   let club = null, clubSource = null;
   try {
-    const j = JSON.parse(await fetchText(CLUB_URL));
-    const rows = (j?.data?.data ?? j?.data?.rows ?? [])
-      .map(r => ({
-        t: String(r.s ?? r.symbol ?? (Array.isArray(r) ? r[0] : "")).toUpperCase(),
-        n: String(r.n ?? r.name ?? (Array.isArray(r) ? r[1] : "")),
-        price: Number(r.price ?? (Array.isArray(r) ? r[2] : NaN)),
-        ytd: Number(r.chYTD ?? r.chYtd ?? (Array.isArray(r) ? r[3] : NaN)),
-      }))
-      .filter(r => r.t && Number.isFinite(r.price) && Number.isFinite(r.ytd) && r.price >= 1 && r.ytd > 100)
-      .sort((a, b) => b.ytd - a.ytd);
+    const j = await fetchJSON(CLUB_URL);
+    const map = j?.data?.data || {};
+    const rows = Object.entries(map)
+      .map(([t, v]) => ({ t, n: "", price: Number(v.price), ytd: Number(v.chYTD) }))
+      .filter(r => Number.isFinite(r.price) && Number.isFinite(r.ytd) && r.price >= 1 && r.ytd > 100)
+      .sort((a, b) => b.ytd - a.ytd)
+      .slice(0, 50)
+      .map(r => ({ ...r, price: +r.price.toFixed(2), ytd: +r.ytd.toFixed(2) }));
     if (rows.length) { club = rows; clubSource = "screen"; }
   } catch (e) {
     console.warn("Club screen failed:", e.message);
@@ -109,4 +132,3 @@ async function main() {
 }
 
 main();
-
