@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Fund Ledger — ETF Screener</title>
+
+<!-- PWA / installability -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Fund Ledger" />
+<meta name="theme-color" content="#1B2420" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%231B2420'/%3E%3Ctext x='50' y='63' font-family='Georgia' font-size='44' fill='%23A8823C' text-anchor='middle'%3EFL%3C/text%3E%3C/svg%3E" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+<style>
+  :root {
+    --paper:#EDE8DC; --paper-deep:#E3DCCB; --ink:#1B2420; --ink-faint:#5B6259;
+    --gold:#A8823C; --gold-soft:#F1E6D0; --teal:#2E5C56; --rust:#8C4A3A; --line:#C9C2AE;
+    --display:'Space Grotesk','Helvetica Neue',Arial,sans-serif;
+    --mono:'IBM Plex Mono','Courier New',monospace;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { height:100%; }
+  body {
+    background:var(--paper); font-family:var(--display); color:var(--ink);
+    display:flex; flex-direction:column;
+    padding-top:env(safe-area-inset-top); padding-bottom:env(safe-area-inset-bottom);
+  }
+  button { font:inherit; border:none; background:none; cursor:pointer; color:inherit; }
+
+  header { padding:14px 20px 14px; border-bottom:1px solid var(--line); flex-shrink:0; }
+  .eyebrow { font-family:var(--mono); font-size:10px; color:var(--gold); letter-spacing:2px; margin-bottom:4px; }
+  .title-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+  h1 { font-size:22px; font-weight:700; letter-spacing:-0.3px; }
+  .refresh-btn { padding:7px 9px; border:1px solid var(--line); border-radius:8px; line-height:0; }
+  .refresh-btn svg { width:14px; height:14px; stroke:var(--ink-faint); }
+  .refresh-btn.loading svg { animation:spin 1s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  @media (prefers-reduced-motion:reduce){ .refresh-btn.loading svg{animation:none;} }
+
+  .freshness { font-family:var(--mono); font-size:10px; letter-spacing:0.5px; color:var(--ink-faint); margin-bottom:10px; min-height:13px; }
+  .freshness.warn { color:var(--rust); }
+
+  .chips { display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; scrollbar-width:none; }
+  .chips::-webkit-scrollbar { display:none; }
+  .chip { display:flex; align-items:center; gap:4px; background:var(--ink); color:var(--paper);
+    border-radius:9999px; padding:4px 10px; font-family:var(--mono); font-size:11px; flex-shrink:0; }
+  .chips-empty { font-size:12px; color:var(--ink-faint); }
+
+  main { flex:1; overflow-y:auto; padding:0 20px; -webkit-overflow-scrolling:touch; }
+
+  .section { border-bottom:1px solid var(--line); }
+  .section-head { width:100%; display:flex; align-items:center; justify-content:space-between; padding:16px 0; }
+  .section-head:focus-visible, button:focus-visible { outline:2px solid var(--gold); outline-offset:2px; border-radius:4px; }
+  .section-left { display:flex; align-items:center; gap:12px; }
+  .section-index { font-family:var(--mono); font-size:11px; color:var(--ink-faint); letter-spacing:1px; }
+  .section-title { font-size:16px; font-weight:600; letter-spacing:0.2px; }
+  .badge { font-family:var(--mono); font-size:11px; color:var(--teal); background:var(--gold-soft); border-radius:9999px; padding:2px 8px; }
+  .chev { color:var(--ink-faint); font-size:12px; }
+  .section-body { padding-bottom:10px; }
+  .section-body[hidden] { display:none; }
+
+  .group-label { font-family:var(--mono); font-size:10px; color:var(--teal); letter-spacing:1.5px; padding:10px 0 2px; }
+  .note { font-size:11px; color:var(--ink-faint); padding-bottom:8px; }
+  .note.warn { color:var(--rust); }
+
+  .row { width:100%; display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--line); text-align:left; }
+  .row-left { display:flex; align-items:center; gap:12px; min-width:0; }
+  .rank { font-family:var(--mono); font-size:10px; color:var(--ink-faint); width:20px; flex-shrink:0; }
+  .marker { width:16px; height:16px; border-radius:9999px; border:1.5px solid var(--line); flex-shrink:0;
+    display:inline-flex; align-items:center; justify-content:center; }
+  .row.active .marker { border-color:var(--gold); background:var(--gold); }
+  .row.active .marker::after { content:''; width:6px; height:6px; border-radius:9999px; background:var(--ink); }
+  .tick { font-family:var(--mono); font-size:13px; letter-spacing:0.5px; flex-shrink:0; }
+  .name { font-size:12px; color:var(--ink-faint); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .price { font-family:var(--mono); font-size:11px; color:var(--ink-faint); flex-shrink:0; }
+  .ret { font-family:var(--mono); font-size:12px; font-weight:500; flex-shrink:0; padding-left:8px; }
+  .ret.pos { color:var(--teal); } .ret.neg { color:var(--rust); }
+
+  .pills { display:flex; flex-wrap:wrap; gap:8px; padding:4px 0 8px; }
+  .pill { font-family:var(--mono); font-size:12px; font-weight:500; padding:8px 14px; border-radius:8px;
+    border:1.5px solid var(--line); color:var(--ink-faint); }
+  .pill.selected { border-color:var(--gold); background:var(--gold-soft); color:var(--teal); }
+
+  footer { border-top:1px solid var(--line); background:var(--paper-deep); padding:14px 20px; flex-shrink:0; }
+  .apply { width:100%; display:flex; align-items:center; justify-content:center; gap:8px;
+    background:var(--ink); color:var(--paper); font-weight:600; font-size:14px; border-radius:12px; padding:13px 0; }
+  .apply .badge { background:var(--gold); color:var(--ink); }
+
+  .spacer { height:24px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">NO. 006 · FUND LEDGER</div>
+  <div class="title-row">
+    <h1>Filter Holdings</h1>
+    <button id="refreshBtn" class="refresh-btn" aria-label="Refresh market data">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 12a9 9 0 0 1 15.3-6.4L21 8M21 3v5h-5M21 12a9 9 0 0 1-15.3 6.4L3 16M3 21v-5h5"/>
+      </svg>
+    </button>
+  </div>
+  <div id="freshness" class="freshness">Loading…</div>
+  <div id="chips" class="chips"><span class="chips-empty">No filters selected yet</span></div>
+</header>
+
+<main id="main"></main>
+
+<footer>
+  <button class="apply" id="applyBtn">Apply Filters <span id="applyCount" class="badge" hidden>0</span></button>
+</footer>
+
+<script>
+"use strict";
+/* ================================================================ *
+ *  STATIC DATA
+ * ================================================================ */
+const TIMEFRAMES = ["1M","2M","3M","YTD","1Y"];
+const DEFAULT_PERIOD = "1M";
+
+const COUNTRY_ETFS = [
+  {t:"EWJ",n:"Japan",grp:"Developed"},{t:"EWA",n:"Australia",grp:"Developed"},
+  {t:"EWC",n:"Canada",grp:"Developed"},{t:"EWG",n:"Germany",grp:"Developed"},
+  {t:"EWQ",n:"France",grp:"Developed"},{t:"EWI",n:"Italy",grp:"Developed"},
+  {t:"EWL",n:"Switzerland",grp:"Developed"},{t:"EWN",n:"Netherlands",grp:"Developed"},
+  {t:"EWO",n:"Austria",grp:"Developed"},{t:"EWK",n:"Belgium",grp:"Developed"},
+  {t:"EWD",n:"Sweden",grp:"Developed"},{t:"EWP",n:"Spain",grp:"Developed"},
+  {t:"EWU",n:"United Kingdom",grp:"Developed"},{t:"EIS",n:"Israel",grp:"Developed"},
+  {t:"EWS",n:"Singapore",grp:"Developed"},{t:"EWH",n:"Hong Kong",grp:"Developed"},
+  {t:"EDEN",n:"Denmark",grp:"Developed"},{t:"EFNL",n:"Finland",grp:"Developed"},
+  {t:"EIRL",n:"Ireland",grp:"Developed"},{t:"ENOR",n:"Norway",grp:"Developed"},
+  {t:"ENZL",n:"New Zealand",grp:"Developed"},{t:"EWY",n:"South Korea",grp:"Developed"},
+  {t:"EWZ",n:"Brazil",grp:"Emerging"},{t:"EWW",n:"Mexico",grp:"Emerging"},
+  {t:"EWT",n:"Taiwan",grp:"Emerging"},{t:"EZA",n:"South Africa",grp:"Emerging"},
+  {t:"INDA",n:"India",grp:"Emerging"},{t:"MCHI",n:"China (MSCI)",grp:"Emerging"},
+  {t:"FXI",n:"China Large-Cap",grp:"Emerging"},{t:"THD",n:"Thailand",grp:"Emerging"},
+  {t:"TUR",n:"Turkey",grp:"Emerging"},{t:"EPOL",n:"Poland",grp:"Emerging"},
+  {t:"ECH",n:"Chile",grp:"Emerging"},{t:"EPU",n:"Peru",grp:"Emerging"},
+  {t:"EIDO",n:"Indonesia",grp:"Emerging"},{t:"EPHE",n:"Philippines",grp:"Emerging"},
+  {t:"ICOL",n:"Colombia",grp:"Emerging"},{t:"EWM",n:"Malaysia",grp:"Emerging"},
+  {t:"KSA",n:"Saudi Arabia",grp:"Emerging"},{t:"QAT",n:"Qatar",grp:"Emerging"},
+  {t:"UAE",n:"United Arab Emirates",grp:"Emerging"}
+];
+
+const SECTOR_ETFS = [
+  {t:"XLK",n:"Technology"},{t:"XLF",n:"Financials"},{t:"XLE",n:"Energy"},
+  {t:"XLV",n:"Health Care"},{t:"XLY",n:"Consumer Discretionary"},{t:"XLP",n:"Consumer Staples"},
+  {t:"XLI",n:"Industrials"},{t:"XLU",n:"Utilities"},{t:"XLB",n:"Materials"},{t:"XLRE",n:"Real Estate"}
+];
+
+const FAMILIES = ["Schwab","Vanguard","iShares"];
+const FAMILY_KEY = {Schwab:"schwab",Vanguard:"vanguard",iShares:"ishares"};
+const FOUNDATION_MASTER = [
+  {group:"Domestic Equity",n:"U.S. Broad Market",schwab:"SCHB",vanguard:"VTI",ishares:"IWV"},
+  {group:"Domestic Equity",n:"U.S. Large-Cap",schwab:"SCHX",vanguard:"VV",ishares:"IVV"},
+  {group:"Domestic Equity",n:"U.S. Large-Cap Growth",schwab:"SCHG",vanguard:"VUG",ishares:"IVW"},
+  {group:"Domestic Equity",n:"U.S. Large-Cap Value",schwab:"SCHV",vanguard:"VTV",ishares:"IVE"},
+  {group:"Domestic Equity",n:"U.S. Mid-Cap",schwab:"SCHM",vanguard:"VO",ishares:"IJH"},
+  {group:"Domestic Equity",n:"U.S. Small-Cap",schwab:"SCHA",vanguard:"VB",ishares:"IJR"},
+  {group:"Domestic Equity",n:"U.S. REIT",schwab:"SCHH",vanguard:"VNQ",ishares:"IYR"},
+  {group:"International Equity",n:"International Equity",schwab:"SCHF",vanguard:"VEA",ishares:"EFA"},
+  {group:"International Equity",n:"International Small-Cap Equity",schwab:"SCHC",vanguard:"VSS",ishares:"SCZ"},
+  {group:"International Equity",n:"Emerging Markets Equity",schwab:"SCHE",vanguard:"VWO",ishares:"EEM"},
+  {group:"Bond",n:"U.S. Treasury Inflation Protected (TIPS)",schwab:"SCHP",vanguard:null,ishares:"TIP"},
+  {group:"Bond",n:"Short-Term U.S. Treasury",schwab:"SCHO",vanguard:null,ishares:"SHY"},
+  {group:"Bond",n:"Intermediate-Term U.S. Treasury",schwab:"SCHR",vanguard:null,ishares:"IEI"}
+];
+const FOUNDATION_GROUPS = ["Domestic Equity","International Equity","Bond"];
+const familyList = f => FOUNDATION_MASTER.filter(r=>r[FAMILY_KEY[f]]).map(r=>({t:r[FAMILY_KEY[f]],n:r.n,group:r.group}));
+
+const ALL_TICKERS = [
+  ...COUNTRY_ETFS.map(e=>({t:e.t,n:e.n,origin:"country"})),
+  ...SECTOR_ETFS.map(e=>({t:e.t,n:e.n,origin:"sector"})),
+  ...FAMILIES.flatMap(f=>familyList(f).map(e=>({t:e.t,n:e.n+" ("+f+")",origin:"foundation"})))
+];
+const UNIQUE_TICKERS = [...new Set(ALL_TICKERS.map(r=>r.t))];
+
+// Snapshot fallback for the 100%+ Club (S&P 500, mid-July 2026).
+const CLUB_FALLBACK = [
+  {t:"SNDK",n:"Sandisk Corporation",price:285.4,ytd:780},
+  {t:"MU",n:"Micron Technology",price:172.1,ytd:303},
+  {t:"INTC",n:"Intel Corporation",price:47.8,ytd:278},
+  {t:"WDC",n:"Western Digital",price:148.9,ytd:271},
+  {t:"STX",n:"Seagate Technology",price:262.3,ytd:250},
+  {t:"MRVL",n:"Marvell Technology",price:118.6,ytd:250},
+  {t:"DELL",n:"Dell Technologies",price:172.5,ytd:243},
+  {t:"GLW",n:"Corning",price:92.7,ytd:192},
+  {t:"AMAT",n:"Applied Materials",price:288.4,ytd:181},
+  {t:"AMD",n:"Advanced Micro Devices",price:245.6,ytd:171},
+  {t:"LITE",n:"Lumentum Holdings",price:197.3,ytd:131}
+];
+
+/* ================================================================ *
+ *  DATA LAYER — Stooq free EOD history (no key), CORS-proxied.
+ *  Cached per calendar day in localStorage so the app loads
+ *  instantly after the first fetch of the day.
+ * ================================================================ */
+const PROXIES = [
+  u => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u),
+  u => "https://corsproxy.io/?url=" + encodeURIComponent(u)
+];
+const STOOQ_HISTORY = t => "https://stooq.com/q/d/l/?s=" + t.toLowerCase() + ".us&i=d";
+const CACHE_KEY = "fundledger.v1";
+const todayKey = () => new Date().toISOString().slice(0,10);
+
+function loadCache(){
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if(!raw) return null;
+    const c = JSON.parse(raw);
+    return c.day === todayKey() ? c : null;
+  } catch { return null; }
+}
+function saveCache(data){
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ day: todayKey(), ...data })); } catch {}
+}
+
+/* ---- Tier 0: pre-built data.json committed by the scheduled job ----
+ * Same-origin, so it loads instantly with no proxies and no waiting. */
+async function loadStatic(){
+  const res = await fetch("./data.json?v=" + todayKey(), { cache: "no-cache", signal: AbortSignal.timeout(6000) });
+  if (!res.ok) throw new Error("no data.json");
+  const j = await res.json();
+  if (!j || !j.returns || Object.keys(j.returns).length < 10) throw new Error("bad data.json");
+  return j;
+}
+
+async function fetchWithProxies(url){
+  let lastErr;
+  for (const wrap of PROXIES){
+    try {
+      const res = await fetch(wrap(url), { signal: AbortSignal.timeout(15000) });
+      if(!res.ok) throw new Error("HTTP "+res.status);
+      const text = await res.text();
+      if (text && text.length > 40) return text;
+      throw new Error("empty body");
+    } catch(e){ lastErr = e; }
+  }
+  throw lastErr || new Error("all proxies failed");
+}
+
+/* ---- 100%+ Club: free full-market screen via stockanalysis.com ----
+ * Free and keyless; covers all US-listed stocks (NYSE, Nasdaq, ADRs) with
+ * end-of-day data. Endpoint is undocumented, so parsing is defensive and
+ * the app falls back to the labeled snapshot if the shape ever changes. */
+const CLUB_URL = "https://stockanalysis.com/api/screener/s/f?m=chYTD&s=desc&c=s,n,price,chYTD&cn=500";
+
+function parseClub(jsonText){
+  const j = JSON.parse(jsonText);
+  const rows = (j && j.data && (Array.isArray(j.data.data) ? j.data.data : j.data.rows)) || [];
+  const out = [];
+  for (const r of rows){
+    // Rows may be objects keyed by column id, or arrays in column order.
+    const sym   = r.s ?? r.symbol ?? (Array.isArray(r) ? r[0] : null);
+    const name  = r.n ?? r.name   ?? (Array.isArray(r) ? r[1] : null);
+    const price = Number(r.price ?? (Array.isArray(r) ? r[2] : NaN));
+    const ytd   = Number(r.chYTD ?? r.chYtd ?? r.ytd ?? (Array.isArray(r) ? r[3] : NaN));
+    if (sym && isFinite(price) && isFinite(ytd) && price >= 1 && ytd > 100){
+      out.push({ t:String(sym).toUpperCase(), n:String(name||sym), price, ytd:+ytd.toFixed(2) });
+    }
+  }
+  out.sort((a,b)=>b.ytd-a.ytd);
+  return out;
+}
+
+async function fetchClub(){
+  const text = await fetchWithProxies(CLUB_URL);
+  const rows = parseClub(text);
+  if (!rows.length) throw new Error("no qualifying rows");
+  return rows;
+}
+
+/* ---- Fallback source: Anthropic API with web search ----
+ * Used when direct feeds are unreachable (e.g. previewing inside Claude,
+ * where outside requests are blocked). Returns real, current figures via
+ * web search rather than a price feed — clearly labeled in the UI. */
+async function askClaudeJSON(prompt){
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({
+      model:"claude-sonnet-4-6",
+      max_tokens:1000,
+      messages:[{ role:"user", content:prompt }],
+      tools:[{ type:"web_search_20250305", name:"web_search" }]
+    })
+  });
+  const data = await res.json();
+  const text = (data.content||[]).map(b=>b.text||"").join("\n").replace(/```json|```/g,"").trim();
+  const m = text.match(/[\[{][\s\S]*[\]}]/);
+  return JSON.parse(m ? m[0] : text);
+}
+
+const PERIOD_WORDS = {"1M":"1-month","2M":"2-month","3M":"3-month","YTD":"year-to-date","1Y":"1-year"};
+
+async function claudeFetchReturns(period){
+  const parsed = await askClaudeJSON(
+    "Use web search to find the "+PERIOD_WORDS[period]+" price return (percent) as of the latest market close for each of these US-listed ETFs: "
+    + UNIQUE_TICKERS.join(", ")
+    + '. Reply with ONLY a raw JSON object mapping ticker to number, e.g. {"EWJ":2.3,"XLK":-1.2}. No prose, no markdown fences. Omit a ticker only if nothing is found.'
+  );
+  const clean = {};
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)){
+    for (const [k,v] of Object.entries(parsed)) if (typeof v === "number" && isFinite(v)) clean[k.toUpperCase()] = v;
+  }
+  if (!Object.keys(clean).length) throw new Error("empty");
+  return clean;
+}
+
+async function claudeFetchClub(){
+  const parsed = await askClaudeJSON(
+    'Use web search to find stocks up more than 100% year-to-date as of the latest close, share price at least $1.00, covering the whole universe a US retail investor can buy (NYSE, Nasdaq, S&P 500, Russell small caps, US-listed ADRs — not just the S&P 500). Reply with ONLY a raw JSON array like [{"t":"TICKER","n":"Name","price":12.3,"ytd":152.3}], sorted by ytd descending, top 25-30 confirmed names. No prose, no fences.'
+  );
+  const rows = (Array.isArray(parsed)?parsed:[])
+    .filter(r=>r && r.t && typeof r.price==="number" && r.price>=1 && r.ytd>100)
+    .map(r=>({t:String(r.t).toUpperCase(),n:String(r.n||r.t),price:r.price,ytd:+Number(r.ytd).toFixed(2)}))
+    .sort((a,b)=>b.ytd-a.ytd);
+  if (!rows.length) throw new Error("empty");
+  return rows;
+}
+
+// Parse Stooq daily CSV -> [{d:Date, c:close}], oldest → newest.
+function parseHistory(csv){
+  const lines = csv.trim().split("\n");
+  const out = [];
+  for (let i=1;i<lines.length;i++){
+    const p = lines[i].split(",");
+    const close = parseFloat(p[4]);
+    if (p[0] && isFinite(close)) out.push({ d:p[0], c:close });
+  }
+  return out;
+}
+
+// Compute period returns from a daily close series.
+function computeReturns(hist){
+  if (!hist || hist.length < 2) return null;
+  const last = hist[hist.length-1];
+  const lastDate = new Date(last.d+"T00:00:00");
+  const closeOnOrBefore = target => {
+    for (let i=hist.length-1;i>=0;i--) if (new Date(hist[i].d+"T00:00:00") <= target) return hist[i].c;
+    return hist[0].c;
+  };
+  const minus = (months)=>{ const d=new Date(lastDate); d.setMonth(d.getMonth()-months); return d; };
+  const jan1 = new Date(lastDate.getFullYear(),0,1);
+  const yearAgo = new Date(lastDate); yearAgo.setFullYear(yearAgo.getFullYear()-1);
+  const pct = base => base>0 ? +(((last.c/base)-1)*100).toFixed(2) : null;
+  return {
+    asOf: last.d,
+    price: last.c,
+    "1M": pct(closeOnOrBefore(minus(1))),
+    "2M": pct(closeOnOrBefore(minus(2))),
+    "3M": pct(closeOnOrBefore(minus(3))),
+    "YTD": pct(closeOnOrBefore(jan1)),
+    "1Y": pct(closeOnOrBefore(yearAgo))
+  };
+}
+
+// Fetch all tickers with limited concurrency; report progress.
+async function fetchAllReturns(onProgress){
+  const results = {};
+  let done = 0, failed = 0;
+  const queue = [...UNIQUE_TICKERS];
+  const workers = Array.from({length:6}, async ()=>{
+    while(queue.length){
+      const t = queue.shift();
+      try {
+        const csv = await fetchWithProxies(STOOQ_HISTORY(t));
+        const r = computeReturns(parseHistory(csv));
+        if (r) results[t] = r; else failed++;
+      } catch { failed++; }
+      done++; onProgress(done, UNIQUE_TICKERS.length);
+    }
+  });
+  await Promise.all(workers);
+  return { results, failed };
+}
+
+/* ================================================================ *
+ *  STATE
+ * ================================================================ */
+const state = {
+  expanded: { timeframe:false, country:false, sector:false, foundation:false, all:false, club100:false },
+  selected: { country:new Set(), sector:new Set(), foundation:new Set(), club100:new Set() },
+  family: null,
+  timeframe: null,
+  returns: {},         // ticker -> {asOf, price, 1M, 2M, ...}
+  dataAsOf: null,      // latest market date in the data
+  fetchedAt: null,     // when we fetched
+  loading: true,
+  partial: 0,          // count of tickers that failed
+  club: null,
+  clubFetchedAt: null,
+  clubSource: null,    // 'screen' | 'search' | null
+  source: null,        // 'stooq' | 'search' | null
+  searchReturns: {}    // period -> { TICKER: pct } when source === 'search'
+};
+const activePeriod = () => state.timeframe || DEFAULT_PERIOD;
+const returnFor = t => {
+  if (state.source === "search"){
+    const map = state.searchReturns[activePeriod()];
+    return map && map[t] != null ? map[t] : null;
+  }
+  const r = state.returns[t];
+  return r && r[activePeriod()] != null ? r[activePeriod()] : null;
+};
+
+/* ================================================================ *
+ *  RENDER
+ * ================================================================ */
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function fmtRet(v){
+  if (v == null) return '<span class="ret" style="color:var(--ink-faint)">—</span>';
+  const cls = v >= 0 ? "pos" : "neg";
+  return '<span class="ret '+cls+'">'+(v>=0?"+":"")+v.toFixed(2)+'%</span>';
+}
+
+function rowHTML({rank,t,n,price,ret,showRet,active,action}){
+  return '<button class="row'+(active?' active':'')+'" data-action="'+action+'" data-t="'+esc(t)+'">'
+    + '<span class="row-left">'
+    + (rank!=null ? '<span class="rank">'+rank+'</span>' : '')
+    + '<span class="marker"></span>'
+    + '<span class="tick">'+esc(t)+'</span>'
+    + '<span class="name">'+esc(n)+'</span>'
+    + (price!=null ? '<span class="price">$'+price.toFixed(2)+'</span>' : '')
+    + '</span>'
+    + (showRet ? fmtRet(ret) : '')
+    + '</button>';
+}
+
+function sectionHTML(key, index, title, count, bodyHTML){
+  const open = state.expanded[key];
+  return '<div class="section">'
+    + '<button class="section-head" data-section="'+key+'" aria-expanded="'+open+'">'
+    + '<span class="section-left"><span class="section-index">'+index+'</span>'
+    + '<span class="section-title">'+title+'</span>'
+    + (count>0 ? '<span class="badge">'+count+'</span>' : '')
+    + '</span><span class="chev">'+(open?'▲':'▼')+'</span></button>'
+    + '<div class="section-body"'+(open?'':' hidden')+'>'+bodyHTML+'</div></div>';
+}
+
+function pillsHTML(items, selectedLabel, action){
+  return '<div class="pills">' + items.map(l =>
+    '<button class="pill'+(l===selectedLabel?' selected':'')+'" data-action="'+action+'" data-v="'+esc(l)+'">'+esc(l)+'</button>'
+  ).join('') + '</div>';
+}
+
+function render(){
+  // Freshness banner
+  const f = $("#freshness");
+  if (state.loading && state.loadProgress){
+    f.textContent = "Fetching latest prices… " + state.loadProgress;
+    f.classList.remove("warn");
+  } else if (state.loading){
+    f.textContent = "Fetching latest prices…";
+    f.classList.remove("warn");
+  } else if (state.source){
+    const when = state.fetchedAt ? state.fetchedAt.toLocaleString([], {dateStyle:"medium", timeStyle:"short"}) : "";
+    f.textContent = state.source === "static"
+      ? "Market close data through " + state.dataAsOf + " · auto-refreshed after each close (last run " + when + ")"
+      : state.source === "stooq"
+      ? "Market data through " + state.dataAsOf + " (latest free close) · fetched " + when
+        + (state.partial ? " · " + state.partial + " tickers unavailable" : "")
+      : "Latest close via web search · fetched " + when + " · direct feed blocked in this preview";
+    f.classList.toggle("warn", state.source === "stooq" && state.partial > 0);
+  } else {
+    f.textContent = "Couldn't reach the data source — pull to retry with the refresh button.";
+    f.classList.add("warn");
+  }
+  $("#refreshBtn").classList.toggle("loading", state.loading);
+
+  // Chips
+  const chips = [
+    ...[...state.selected.country].map(t=>({t,g:"country"})),
+    ...[...state.selected.sector].map(t=>({t,g:"sector"})),
+    ...[...state.selected.foundation].map(t=>({t,g:"foundation"})),
+    ...[...state.selected.club100].map(t=>({t,g:"club100"})),
+    ...(state.timeframe ? [{t:state.timeframe,g:"timeframe"}] : [])
+  ];
+  $("#chips").innerHTML = chips.length
+    ? chips.map(c=>'<button class="chip" data-action="chip" data-g="'+c.g+'" data-t="'+esc(c.t)+'">'+esc(c.t)+' ✕</button>').join('')
+    : '<span class="chips-empty">No filters selected yet</span>';
+  const count = chips.length;
+  $("#applyCount").hidden = count===0;
+  $("#applyCount").textContent = count;
+
+  /* --- sections --- */
+  const period = activePeriod();
+
+  const tfBody = pillsHTML(TIMEFRAMES, state.timeframe, "timeframe");
+
+  const countryBody = ["Developed","Emerging"].map(grp =>
+    '<div class="group-label">'+grp.toUpperCase()+' MARKETS</div>'
+    + COUNTRY_ETFS.filter(e=>e.grp===grp).sort((a,b)=>a.n.localeCompare(b.n))
+        .map(e=>rowHTML({t:e.t,n:e.n,active:state.selected.country.has(e.t),action:"country"})).join('')
+  ).join('');
+
+  const sectorBody = [...SECTOR_ETFS].sort((a,b)=>a.n.localeCompare(b.n))
+    .map(e=>rowHTML({t:e.t,n:e.n,active:state.selected.sector.has(e.t),action:"sector"})).join('');
+
+  let foundationBody = pillsHTML(FAMILIES, state.family, "family");
+  if (state.family){
+    foundationBody += FOUNDATION_GROUPS.map(grp => {
+      const rows = familyList(state.family).filter(r=>r.group===grp);
+      return rows.length ? '<div class="group-label">'+grp.toUpperCase()+'</div>'
+        + rows.map(e=>rowHTML({t:e.t,n:e.n,active:state.selected.foundation.has(e.t),action:"foundation"})).join('') : '';
+    }).join('');
+  } else {
+    foundationBody += '<div class="note">Select a fund family above to see its ETFs.</div>';
+  }
+
+  const ranked = ALL_TICKERS.map(r=>({...r,ret:returnFor(r.t)}))
+    .sort((a,b)=>(b.ret??-1e9)-(a.ret??-1e9));
+  const allBody =
+    '<div class="note">Every ticker above, ranked by '+period+' return'+(state.timeframe?'':' (default)')+' — change the period in section 01 · Timeframe.</div>'
+    + ranked.map((r,i)=>rowHTML({
+        rank:i+1,t:r.t,n:r.n,ret:r.ret,showRet:true,
+        active:state.selected[r.origin].has(r.t),action:r.origin
+      })).join('');
+
+  const clubRows = state.club ?? CLUB_FALLBACK;
+  const clubFresh = state.club
+    ? '<div class="group-label">'
+      + (state.clubSource === "screen"
+          ? 'FULL-MARKET SCREEN · ALL US-LISTED STOCKS · DATA THROUGH ' + esc(state.dataAsOf || "latest close")
+            + (state.source === "static" ? ' · AUTO-REFRESHED AT CLOSE' : '')
+          : 'VIA WEB SEARCH · ALL US-TRADABLE STOCKS · LATEST CLOSE')
+      + (state.clubFetchedAt ? ' · FETCHED ' + esc(state.clubFetchedAt.toLocaleString([], {dateStyle:"short", timeStyle:"short"})) : '')
+      + '</div>'
+    : '<div class="group-label" style="color:var(--rust)">SNAPSHOT · S&amp;P 500 · MID-JULY 2026 · LIVE SOURCES UNREACHABLE</div>';
+  const clubBody =
+    clubFresh
+    + '<div class="note">US-tradable stocks (NYSE, Nasdaq, ADRs) up 100%+ year-to-date, price ≥ $1, highest first.'
+    + (state.club ? ' End-of-day figures from a free full-market screen.' :
+       ' Tap refresh to retry the live screen.')
+    + '</div>'
+    + clubRows.map((r,i)=>rowHTML({
+        rank:i+1,t:r.t,n:r.n,price:r.price,ret:r.ytd,showRet:true,
+        active:state.selected.club100.has(r.t),action:"club100"
+      })).join('');
+
+  $("#main").innerHTML =
+      sectionHTML("timeframe","01","Timeframe", state.timeframe?1:0, tfBody)
+    + sectionHTML("country","02","Country", state.selected.country.size, countryBody)
+    + sectionHTML("sector","03","Sectors", state.selected.sector.size, sectorBody)
+    + sectionHTML("foundation","04","Foundation ETFs", state.selected.foundation.size, foundationBody)
+    + sectionHTML("all","05","All", 0, allBody)
+    + sectionHTML("club100","06","The 100%+ Club YTD", state.selected.club100.size, clubBody)
+    + '<div class="spacer"></div>';
+}
+
+/* ================================================================ *
+ *  EVENTS (delegated)
+ * ================================================================ */
+document.addEventListener("click", e => {
+  const el = e.target.closest("[data-section],[data-action]");
+  if (!el) return;
+
+  if (el.dataset.section){
+    state.expanded[el.dataset.section] = !state.expanded[el.dataset.section];
+    render(); return;
+  }
+  const a = el.dataset.action;
+  if (a === "timeframe"){
+    state.timeframe = state.timeframe === el.dataset.v ? null : el.dataset.v;
+    ensurePeriod();
+  } else if (a === "family"){
+    state.family = state.family === el.dataset.v ? null : el.dataset.v;
+    state.selected.foundation = new Set();
+  } else if (a === "chip"){
+    const g = el.dataset.g;
+    if (g === "timeframe") state.timeframe = null;
+    else { state.selected[g].delete(el.dataset.t); }
+  } else if (state.selected[a]){
+    const set = state.selected[a];
+    set.has(el.dataset.t) ? set.delete(el.dataset.t) : set.add(el.dataset.t);
+  }
+  render();
+});
+
+$("#refreshBtn").addEventListener("click", () => loadData(true));
+
+/* ================================================================ *
+ *  BOOT
+ * ================================================================ */
+async function ensurePeriod(){
+  // Stooq history already contains every period; only the search source
+  // fetches per-period, so pull any missing one on demand.
+  if (state.source !== "search") return;
+  const p = activePeriod();
+  if (state.searchReturns[p]) return;
+  state.loading = true; render();
+  try {
+    state.searchReturns[p] = await claudeFetchReturns(p);
+    state.fetchedAt = new Date();
+  } catch {}
+  state.loading = false; render();
+}
+
+async function loadData(force){
+  /* Tier 0: pre-built market-close file — instant, no waiting. */
+  if (!force){
+    try {
+      const j = await loadStatic();
+      Object.assign(state, {
+        returns: j.returns, dataAsOf: j.dataAsOf, partial: j.partial || 0,
+        source: "static",
+        fetchedAt: j.generatedAt ? new Date(j.generatedAt) : null,
+        club: j.club || null,
+        clubSource: j.club ? (j.clubSource || "screen") : null,
+        clubFetchedAt: j.generatedAt ? new Date(j.generatedAt) : null,
+        loading: false
+      });
+      render();
+      return;
+    } catch {}
+  }
+
+  /* Tier 1: today's on-device cache. */
+  const cached = force ? null : loadCache();
+  if (cached && cached.source){
+    Object.assign(state, {
+      returns: cached.returns || {}, searchReturns: cached.searchReturns || {},
+      dataAsOf: cached.dataAsOf, source: cached.source,
+      fetchedAt: cached.fetchedAt ? new Date(cached.fetchedAt) : null,
+      partial: cached.partial || 0,
+      club: cached.club || null, clubSource: cached.clubSource || null,
+      clubFetchedAt: cached.clubFetchedAt ? new Date(cached.clubFetchedAt) : null,
+      loading: false
+    });
+    render();
+    return;
+  }
+  state.loading = true; state.loadProgress = "";
+  render();
+
+  /* --- Primary: direct EOD feeds (probe once so blocked environments
+         fail over to search in seconds instead of minutes) --- */
+  let stooqOk = false;
+  let probeOk = false;
+  try {
+    const probe = await fetchWithProxies(STOOQ_HISTORY("SPY"));
+    probeOk = parseHistory(probe).length > 0;
+  } catch {}
+  if (probeOk) try {
+    const { results, failed } = await fetchAllReturns((d,total)=>{
+      state.loadProgress = d + " / " + total + " tickers";
+      $("#freshness").textContent = "Fetching latest prices… " + state.loadProgress;
+    });
+    if (Object.keys(results).length >= 10){
+      state.returns = results;
+      state.partial = failed;
+      const dates = Object.values(results).map(r=>r.asOf).sort();
+      state.dataAsOf = dates[dates.length-1] || null;
+      state.source = "stooq";
+      stooqOk = true;
+    }
+  } catch {}
+
+  if (probeOk) try {
+    const rows = await fetchClub();
+    state.club = rows; state.clubSource = "screen"; state.clubFetchedAt = new Date();
+  } catch { state.club = null; state.clubSource = null; }
+
+  /* --- Fallback: web search via the Anthropic API (works in preview) --- */
+  if (!stooqOk){
+    $("#freshness").textContent = "Direct feed blocked — fetching latest close via web search…";
+    try {
+      state.searchReturns[activePeriod()] = await claudeFetchReturns(activePeriod());
+      state.source = "search";
+    } catch { state.source = null; }
+  }
+  if (!state.club){
+    try {
+      state.club = await claudeFetchClub();
+      state.clubSource = "search"; state.clubFetchedAt = new Date();
+    } catch {}
+  }
+
+  if (state.source || state.club) state.fetchedAt = new Date();
+  saveCache({
+    source: state.source, returns: state.returns, searchReturns: state.searchReturns,
+    dataAsOf: state.dataAsOf,
+    fetchedAt: state.fetchedAt ? state.fetchedAt.toISOString() : null,
+    partial: state.partial,
+    club: state.club, clubSource: state.clubSource,
+    clubFetchedAt: state.clubFetchedAt ? state.clubFetchedAt.toISOString() : null
+  });
+  state.loading = false;
+  state.loadProgress = "";
+  render();
+}
+
+render();
+loadData(false);
+</script>
+</body>
+</html>
+
