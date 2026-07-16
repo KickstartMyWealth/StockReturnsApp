@@ -1,6 +1,6 @@
 // Fetches EOD data at market close and writes data.json for the app.
 // Run by GitHub Actions (see .github/workflows/refresh-data.yml). Node 20+.
-// v3: Yahoo chart API primary (Stooq blocks datacenter IPs), whole-market screen, Star Gainers.
+// v2: Yahoo chart API primary (Stooq blocks datacenter IPs), corrected screener endpoint.
 
 import { writeFileSync, readFileSync, existsSync } from "node:fs";
 
@@ -120,29 +120,33 @@ async function main() {
     // A new high = today's 52-week high rose above the last stored value.
     // First run seeds with stocks closing within 0.3% of their 52w high.
     // Stars = consecutive new-high days, capped at 5. Streak resets on a miss.
-    let prev = { stars: {}, highs: {}, day: null };
+    let prev = { stars: {}, highs: {}, since: {}, day: null };
     try {
       if (existsSync("data.json")) {
         const p = JSON.parse(readFileSync("data.json", "utf8"));
-        if (p.starsState) prev = p.starsState;
+        if (p.starsState) prev = { since: {}, ...p.starsState };
       }
     } catch {}
     const todayET = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
     const sameDay = prev.day === todayET; // rerun guard: don't double-increment
-    const newStars = {}, newHighs = {};
+    const newStars = {}, newHighs = {}, newSince = {};
     for (const [t, v] of Object.entries(map)) {
       const price = Number(v.price), high = Number(v.high52);
       if (!Number.isFinite(price) || !Number.isFinite(high) || price < 1 || high <= 0) continue;
       newHighs[t] = high;
       const prevHigh = prev.highs[t];
       const madeHigh = prevHigh != null ? high > prevHigh * 1.0001 : price >= high * 0.997;
-      if (sameDay) { if (prev.stars[t]) newStars[t] = prev.stars[t]; }
-      else if (madeHigh) newStars[t] = Math.min((prev.stars[t] || 0) + 1, 5);
+      if (sameDay) {
+        if (prev.stars[t]) { newStars[t] = prev.stars[t]; newSince[t] = prev.since[t] || prev.day || todayET; }
+      } else if (madeHigh) {
+        newStars[t] = Math.min((prev.stars[t] || 0) + 1, 5);
+        newSince[t] = prev.stars[t] ? (prev.since[t] || todayET) : todayET; // streak start date
+      }
       // streak broken: omitted -> resets to 0
     }
-    starsState = { day: sameDay ? prev.day : todayET, stars: newStars, highs: newHighs };
+    starsState = { day: sameDay ? prev.day : todayET, stars: newStars, highs: newHighs, since: newSince };
     starGainers = Object.entries(newStars)
-      .map(([t, stars]) => ({ t, stars, price: +Number(map[t].price).toFixed(2),
+      .map(([t, stars]) => ({ t, stars, since: newSince[t] || null, price: +Number(map[t].price).toFixed(2),
         ytd: Number.isFinite(Number(map[t].chYTD)) ? +Number(map[t].chYTD).toFixed(2) : null }))
       .sort((a, b) => b.stars - a.stars || (b.ytd ?? -1e9) - (a.ytd ?? -1e9))
       .slice(0, 50);
