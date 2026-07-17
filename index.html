@@ -386,7 +386,7 @@ const state = {
   expanded: { country:false, sector:false, foundation:false, all:false, club100:false, stars:false, green:false },
   selected: { country:new Set(), sector:new Set(), foundation:new Set(), club100:new Set(), stars:new Set() },
   family: null,
-  timeframe: "1M",
+  timeframe: null,
   returns: {},         // ticker -> {asOf, price, 1M, 2M, ...}
   dataAsOf: null,      // latest market date in the data
   fetchedAt: null,     // when we fetched
