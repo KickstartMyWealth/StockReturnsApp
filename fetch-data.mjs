@@ -129,20 +129,27 @@ async function main() {
     } catch {}
     const todayET = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
     const sameDay = prev.day === todayET; // rerun guard: don't double-increment
+    // Cumulative, never resets: a star is added on any day a stock sets a new
+    // 52-week high, up to 5 total. Missed days simply don't add a star; they
+    // don't remove one. "since" tracks the most recent date a star was added.
     const newStars = {}, newHighs = {}, newSince = {};
     for (const [t, v] of Object.entries(map)) {
       const price = Number(v.price), high = Number(v.high52);
       if (!Number.isFinite(price) || !Number.isFinite(high) || price < 1 || high <= 0) continue;
       newHighs[t] = high;
       const prevHigh = prev.highs[t];
+      const prevStars = prev.stars[t] || 0;
       const madeHigh = prevHigh != null ? high > prevHigh * 1.0001 : price >= high * 0.997;
       if (sameDay) {
-        if (prev.stars[t]) { newStars[t] = prev.stars[t]; newSince[t] = prev.since[t] || prev.day || todayET; }
+        // Rerun guard: carry forward unchanged, don't double-count today.
+        if (prevStars) { newStars[t] = prevStars; newSince[t] = prev.since[t] || prev.day || todayET; }
       } else if (madeHigh) {
-        newStars[t] = Math.min((prev.stars[t] || 0) + 1, 5);
-        newSince[t] = prev.stars[t] ? (prev.since[t] || todayET) : todayET; // streak start date
+        newStars[t] = Math.min(prevStars + 1, 5);
+        newSince[t] = todayET; // date this star was added
+      } else if (prevStars) {
+        newStars[t] = prevStars;          // carry forward, no new star today
+        newSince[t] = prev.since[t] || null; // keep prior "last star added" date
       }
-      // streak broken: omitted -> resets to 0
     }
     starsState = { day: sameDay ? prev.day : todayET, stars: newStars, highs: newHighs, since: newSince };
     starGainers = Object.entries(newStars)
