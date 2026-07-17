@@ -400,7 +400,7 @@ const state = {
   allGreen: null,      // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
   searchReturns: {}    // period -> { TICKER: pct } when source === 'search'
 };
-const activePeriod = () => state.timeframe || DEFAULT_PERIOD;
+const activePeriod = () => state.timeframe || "1D";
 const returnFor = t => {
   if (state.source === "search"){
     const map = state.searchReturns[activePeriod()];
@@ -510,7 +510,7 @@ function render(){
     .sort((a,b)=>(b.ret??-1e9)-(a.ret??-1e9));
   const allBody =
     tfBody
-    + '<div class="note">Country, sector, and foundation ETFs ranked by '+period+' return'+(state.timeframe?'':' (default)')+'. Tap a period above to re-rank.</div>'
+    + '<div class="note">Country, sector, and foundation ETFs ranked by '+(state.timeframe?period+' return':"today's % change (1D)")+'. Tap a period above to switch to a longer window.</div>'
     + ranked.map((r,i)=>rowHTML({
         rank:i+1,t:r.t,n:r.n,price:priceFor(r.t),ret:r.ret,showRet:true,
         active:state.selected[r.origin].has(r.t),action:r.origin
