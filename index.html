@@ -90,13 +90,14 @@
   .apply { width:100%; display:flex; align-items:center; justify-content:center; gap:8px;
     background:var(--ink); color:var(--paper); font-weight:600; font-size:14px; border-radius:12px; padding:13px 0; }
   .apply .badge { background:var(--gold); color:var(--ink); }
-
   .gwrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
   .gtable { border-collapse:collapse; width:100%; min-width:430px; font-family:var(--mono); }
   .gtable th { font-size:9px; color:var(--ink-faint); letter-spacing:1px; text-align:right; padding:6px 4px; border-bottom:1px solid var(--line); font-weight:500; }
   .gtable th:first-child { text-align:left; }
   .gtable td { font-size:10.5px; text-align:right; padding:8px 4px; border-bottom:1px solid var(--line); color:var(--teal); white-space:nowrap; }
   .gtable td:first-child { text-align:left; color:var(--ink); font-size:12px; letter-spacing:0.5px; }
+  .gtable.red td { color:var(--rust); }
+  .gtable.red td:first-child { color:var(--ink); }
 
   .spacer { height:24px; }
 </style>
@@ -383,7 +384,7 @@ async function fetchAllReturns(onProgress){
  *  STATE
  * ================================================================ */
 const state = {
-  expanded: { country:false, sector:false, foundation:false, all:false, club100:false, stars:false, green:false },
+  expanded: { country:false, sector:false, foundation:false, all:false, club100:false, stars:false, green:false, red:false },
   selected: { country:new Set(), sector:new Set(), foundation:new Set(), club100:new Set(), stars:new Set() },
   family: null,
   timeframe: null,
@@ -398,6 +399,7 @@ const state = {
   source: null,        // 'stooq' | 'search' | null
   starGainers: null,   // [{t, price, ytd, stars}] from data.json
   allGreen: null,      // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
+  allRed: null,        // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
   searchReturns: {}    // period -> { TICKER: pct } when source === 'search'
 };
 const activePeriod = () => state.timeframe || "1D";
@@ -574,11 +576,28 @@ function render(){
         + '</tbody></table></div>'
       : '');
 
+  const redRows = state.allRed || [];
+  const redBody =
+    (redRows.length
+      ? '<div class="group-label">NEGATIVE ACROSS EVERY WINDOW \u00b7 ' + esc(fmtDate(state.dataAsOf) || "latest close") + '</div>'
+      : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
+    + '<div class="note">Stocks red in all six windows \u2014 5-day, 1-month, 3-month, 6-month, YTD, and 1-year \u2014 price \u2265 $1. Worst YTD first.</div>'
+    + (redRows.length
+      ? '<div class="gwrap"><table class="gtable red"><thead><tr><th>TICKER</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
+        + redRows.map(r =>
+            '<tr><td>' + esc(r.t) + '</td>'
+            + '<td>' + (r.day != null ? r.day.toFixed(1) + '%' : '\u2014') + '</td>'
+            + [r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => '<td>' + (v != null ? v.toFixed(1) + '%' : '\u2014') + '</td>').join('')
+            + '</tr>').join('')
+        + '</tbody></table></div>'
+      : '');
+
   $("#main").innerHTML =
       sectionHTML("all","01","Country, Sectors, and ETFs", 0, allBody)
     + sectionHTML("club100","02","The 100%+ Club YTD", state.selected.club100.size, clubBody)
     + sectionHTML("stars","03","Star Gainers", state.selected.stars.size, starsBody)
     + sectionHTML("green","04","All Green All Year", 0, greenBody)
+    + sectionHTML("red","05","Shorts - All Red All Year", 0, redBody)
     + '<div class="spacer"></div>';
 }
 
@@ -642,6 +661,7 @@ async function loadData(force){
         club: j.club || null,
         starGainers: j.starGainers || null,
         allGreen: j.allGreen || null,
+        allRed: j.allRed || null,
         clubSource: j.club ? (j.clubSource || "screen") : null,
         clubFetchedAt: j.generatedAt ? new Date(j.generatedAt) : null,
         loading: false
