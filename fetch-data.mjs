@@ -104,7 +104,7 @@ async function main() {
   }));
 
   // ---- Whole-market screen: 100%+ Club and Star Gainers in one call ----
-  let club = null, clubSource = null, starGainers = null, starsState = null, allGreen = null;
+  let club = null, clubSource = null, starGainers = null, starsState = null, allGreen = null, allRed = null;
   try {
     const j = await fetchJSON(SCREEN_URL);
     const map = j?.data?.data || {};
@@ -174,6 +174,18 @@ async function main() {
       .slice(0, 50)
       .map(r => ({ ...r, price: +r.price.toFixed(2), w: +r.w.toFixed(1), m1: +r.m1.toFixed(1), m3: +r.m3.toFixed(1), m6: +r.m6.toFixed(1), ytd: +r.ytd.toFixed(1), y1: +r.y1.toFixed(1), day: r.day != null ? +r.day.toFixed(1) : null }));
     if (!allGreen.length) allGreen = null;
+
+    // ---- Shorts - All Red All Year: negative across 5D, 1M, 3M, 6M, YTD, 1Y ----
+    // Mirror of All Green; -100% is already a natural floor for a losing
+    // stock, so no sanity cap is needed here the way the upside had one.
+    allRed = Object.entries(map)
+      .map(([t, v]) => ({ t, price: P(v.price), w: P(v.ch1w), m1: P(v.ch1m), m3: P(v.ch3m), m6: P(v.ch6m), ytd: P(v.chYTD), y1: P(v.ch1y), day: P(v.change) }))
+      .filter(r => r.price >= 1
+        && [r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].every(x => x != null && x < 0))
+      .sort((a, b) => a.ytd - b.ytd) // worst YTD first
+      .slice(0, 50)
+      .map(r => ({ ...r, price: +r.price.toFixed(2), w: +r.w.toFixed(1), m1: +r.m1.toFixed(1), m3: +r.m3.toFixed(1), m6: +r.m6.toFixed(1), ytd: +r.ytd.toFixed(1), y1: +r.y1.toFixed(1), day: r.day != null ? +r.day.toFixed(1) : null }));
+    if (!allRed.length) allRed = null;
   } catch (e) {
     console.warn("Market screen failed:", e.message);
   }
@@ -189,9 +201,10 @@ async function main() {
     starGainers,
     starsState,
     allGreen,
+    allRed,
   };
   writeFileSync("data.json", JSON.stringify(payload));
-  console.log(`Wrote data.json — ${Object.keys(returns).length} tickers ok, ${failed} failed, club: ${club ? club.length : "unavailable"}, stars: ${starGainers ? starGainers.length : "unavailable"}, green: ${allGreen ? allGreen.length : "unavailable"}`);
+  console.log(`Wrote data.json — ${Object.keys(returns).length} tickers ok, ${failed} failed, club: ${club ? club.length : "unavailable"}, stars: ${starGainers ? starGainers.length : "unavailable"}, green: ${allGreen ? allGreen.length : "unavailable"}, red: ${allRed ? allRed.length : "unavailable"}`);
   if (Object.keys(returns).length < 10) process.exit(1); // don't commit a broken file
 }
 
