@@ -18,7 +18,7 @@ const UNIQUE_TICKERS = [
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36";
 const YAHOO = t => `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(t)}?range=1y&interval=1d`;
 const STOOQ = t => `https://stooq.com/q/d/l/?s=${t.toLowerCase()}.us&i=d`;
-const SCREEN_URL = "https://stockanalysis.com/_api/endpoints/screener/data-points?type=s&ids=chYTD+price+high52+ch1w+ch1m+ch3m+ch6m+ch1y";
+const SCREEN_URL = "https://stockanalysis.com/_api/endpoints/screener/data-points?type=s&ids=chYTD+price+high52+ch1w+ch1m+ch3m+ch6m+ch1y+change";
 
 async function fetchJSON(url) {
   const res = await fetch(url, { headers: { "User-Agent": UA, "Accept": "application/json" } });
@@ -114,11 +114,11 @@ async function main() {
     // +1,000,000% YTD) rather than genuine outsized winners.
     const YTD_SANITY_CAP = 2000; // percent
     const rows = Object.entries(map)
-      .map(([t, v]) => ({ t, n: "", price: Number(v.price), ytd: Number(v.chYTD) }))
+      .map(([t, v]) => ({ t, n: "", price: Number(v.price), ytd: Number(v.chYTD), day: Number(v.change) }))
       .filter(r => Number.isFinite(r.price) && Number.isFinite(r.ytd) && r.price >= 1 && r.ytd > 100 && r.ytd <= YTD_SANITY_CAP)
       .sort((a, b) => b.ytd - a.ytd)
       .slice(0, 50)
-      .map(r => ({ ...r, price: +r.price.toFixed(2), ytd: +r.ytd.toFixed(2) }));
+      .map(r => ({ ...r, price: +r.price.toFixed(2), ytd: +r.ytd.toFixed(2), day: Number.isFinite(r.day) ? +r.day.toFixed(2) : null }));
     if (rows.length) { club = rows; clubSource = "screen"; }
 
     // ---- Star Gainers: consecutive days of new 1-year highs ----
@@ -159,19 +159,20 @@ async function main() {
     starsState = { day: sameDay ? prev.day : todayET, stars: newStars, highs: newHighs, since: newSince };
     starGainers = Object.entries(newStars)
       .map(([t, stars]) => ({ t, stars, since: newSince[t] || null, price: +Number(map[t].price).toFixed(2),
-        ytd: Number.isFinite(Number(map[t].chYTD)) ? +Number(map[t].chYTD).toFixed(2) : null }))
+        ytd: Number.isFinite(Number(map[t].chYTD)) ? +Number(map[t].chYTD).toFixed(2) : null,
+        day: Number.isFinite(Number(map[t].change)) ? +Number(map[t].change).toFixed(2) : null }))
       .sort((a, b) => b.stars - a.stars || (b.ytd ?? -1e9) - (a.ytd ?? -1e9))
       .slice(0, 50);
 
     // ---- All Green All Year: positive across 5D, 1M, 3M, 6M, YTD, 1Y ----
     const P = x => { const n = Number(x); return Number.isFinite(n) ? n : null; };
     allGreen = Object.entries(map)
-      .map(([t, v]) => ({ t, price: P(v.price), w: P(v.ch1w), m1: P(v.ch1m), m3: P(v.ch3m), m6: P(v.ch6m), ytd: P(v.chYTD), y1: P(v.ch1y) }))
+      .map(([t, v]) => ({ t, price: P(v.price), w: P(v.ch1w), m1: P(v.ch1m), m3: P(v.ch3m), m6: P(v.ch6m), ytd: P(v.chYTD), y1: P(v.ch1y), day: P(v.change) }))
       .filter(r => r.price >= 1 && r.ytd != null && r.ytd <= YTD_SANITY_CAP
         && [r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].every(x => x != null && x > 0))
       .sort((a, b) => b.ytd - a.ytd)
       .slice(0, 50)
-      .map(r => ({ ...r, price: +r.price.toFixed(2), w: +r.w.toFixed(1), m1: +r.m1.toFixed(1), m3: +r.m3.toFixed(1), m6: +r.m6.toFixed(1), ytd: +r.ytd.toFixed(1), y1: +r.y1.toFixed(1) }));
+      .map(r => ({ ...r, price: +r.price.toFixed(2), w: +r.w.toFixed(1), m1: +r.m1.toFixed(1), m3: +r.m3.toFixed(1), m6: +r.m6.toFixed(1), ytd: +r.ytd.toFixed(1), y1: +r.y1.toFixed(1), day: r.day != null ? +r.day.toFixed(1) : null }));
     if (!allGreen.length) allGreen = null;
   } catch (e) {
     console.warn("Market screen failed:", e.message);
