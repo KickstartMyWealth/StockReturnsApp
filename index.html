@@ -434,14 +434,17 @@ function fmtRet(v){
   return '<span class="ret '+cls+'">'+(v>=0?"+":"")+v.toFixed(2)+'%</span>';
 }
 
-function rowHTML({rank,t,n,price,ret,showRet,active,action}){
+function rowHTML({rank,t,n,price,day,ret,showRet,active,action}){
+  const secondary = day!=null
+    ? '<span class="price">'+(day>=0?'+':'')+day.toFixed(2)+'%</span>'
+    : (price!=null ? '<span class="price">$'+price.toFixed(2)+'</span>' : '');
   return '<button class="row'+(active?' active':'')+'" data-action="'+action+'" data-t="'+esc(t)+'">'
     + '<span class="row-left">'
     + (rank!=null ? '<span class="rank">'+rank+'</span>' : '')
     + '<span class="marker"></span>'
     + '<span class="tick">'+esc(t)+'</span>'
     + '<span class="name">'+esc(n)+'</span>'
-    + (price!=null ? '<span class="price">$'+price.toFixed(2)+'</span>' : '')
+    + secondary
     + '</span>'
     + (showRet ? fmtRet(ret) : '')
     + '</button>';
@@ -533,7 +536,7 @@ function render(){
        ' Tap refresh to retry the live screen.')
     + '</div>'
     + clubRows.map((r,i)=>rowHTML({
-        rank:i+1,t:r.t,n:r.n,price:r.price,ret:r.ytd,showRet:true,
+        rank:i+1,t:r.t,n:r.n,day:r.day,ret:r.ytd,showRet:true,
         active:state.selected.club100.has(r.t),action:"club100"
       })).join('');
 
@@ -544,7 +547,7 @@ function render(){
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
     + '<div class="note">Stocks setting new 52-week highs (WSJ new-highs style). Every day a stock makes a new high adds a star, up to ★★★★★ \u2014 stars are cumulative and never reset, even after a missed day. Date shown is when the star was last added.</div>'
     + starRows.map((r,i)=>rowHTML({
-        rank:i+1,t:r.t,n:"\u2605".repeat(Math.min(r.stars||1,5))+(r.since?" \u00b7 "+fmtDate(r.since):""),price:r.price,ret:r.ytd,showRet:r.ytd!=null,
+        rank:i+1,t:r.t,n:"\u2605".repeat(Math.min(r.stars||1,5))+(r.since?" \u00b7 "+fmtDate(r.since):""),day:r.day,ret:r.ytd,showRet:r.ytd!=null,
         active:state.selected.stars.has(r.t),action:"stars"
       })).join('');
 
@@ -555,10 +558,10 @@ function render(){
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
     + '<div class="note">Stocks green in all six windows \u2014 5-day, 1-month, 3-month, 6-month, YTD, and 1-year \u2014 price \u2265 $1. Top 50 by YTD.</div>'
     + (greenRows.length
-      ? '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>PRICE</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
+      ? '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
         + greenRows.map(r =>
             '<tr><td>' + esc(r.t) + '</td>'
-            + '<td>$' + (r.price != null ? r.price.toFixed(2) : '\u2014') + '</td>'
+            + '<td>' + (r.day != null ? (r.day>=0?'+':'')+r.day.toFixed(1) + '%' : '\u2014') + '</td>'
             + [r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => '<td>' + (v != null ? v.toFixed(1) + '%' : '\u2014') + '</td>').join('')
             + '</tr>').join('')
         + '</tbody></table></div>'
