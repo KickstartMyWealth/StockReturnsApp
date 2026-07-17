@@ -107,10 +107,13 @@ async function main() {
     const j = await fetchJSON(SCREEN_URL);
     const map = j?.data?.data || {};
 
-    // 100%+ Club: YTD > 100%, price >= $1
+    // 100%+ Club: YTD > 100%, price >= $1. Cap at YTD_SANITY_CAP to exclude
+    // reverse-split-style data artifacts (e.g. a stock erroneously showing
+    // +1,000,000% YTD) rather than genuine outsized winners.
+    const YTD_SANITY_CAP = 2000; // percent
     const rows = Object.entries(map)
       .map(([t, v]) => ({ t, n: "", price: Number(v.price), ytd: Number(v.chYTD) }))
-      .filter(r => Number.isFinite(r.price) && Number.isFinite(r.ytd) && r.price >= 1 && r.ytd > 100)
+      .filter(r => Number.isFinite(r.price) && Number.isFinite(r.ytd) && r.price >= 1 && r.ytd > 100 && r.ytd <= YTD_SANITY_CAP)
       .sort((a, b) => b.ytd - a.ytd)
       .slice(0, 50)
       .map(r => ({ ...r, price: +r.price.toFixed(2), ytd: +r.ytd.toFixed(2) }));
@@ -162,7 +165,8 @@ async function main() {
     const P = x => { const n = Number(x); return Number.isFinite(n) ? n : null; };
     allGreen = Object.entries(map)
       .map(([t, v]) => ({ t, price: P(v.price), w: P(v.ch1w), m1: P(v.ch1m), m3: P(v.ch3m), m6: P(v.ch6m), ytd: P(v.chYTD), y1: P(v.ch1y) }))
-      .filter(r => r.price >= 1 && [r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].every(x => x != null && x > 0))
+      .filter(r => r.price >= 1 && r.ytd != null && r.ytd <= YTD_SANITY_CAP
+        && [r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].every(x => x != null && x > 0))
       .sort((a, b) => b.ytd - a.ytd)
       .slice(0, 50)
       .map(r => ({ ...r, price: +r.price.toFixed(2), w: +r.w.toFixed(1), m1: +r.m1.toFixed(1), m3: +r.m3.toFixed(1), m6: +r.m6.toFixed(1), ytd: +r.ytd.toFixed(1), y1: +r.y1.toFixed(1) }));
