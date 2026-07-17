@@ -18,7 +18,7 @@ const UNIQUE_TICKERS = [
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36";
 const YAHOO = t => `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(t)}?range=1y&interval=1d`;
 const STOOQ = t => `https://stooq.com/q/d/l/?s=${t.toLowerCase()}.us&i=d`;
-const SCREEN_URL = "https://stockanalysis.com/_api/endpoints/screener/data-points?type=s&ids=chYTD+price+high52";
+const SCREEN_URL = "https://stockanalysis.com/_api/endpoints/screener/data-points?type=s&ids=chYTD+price+high52+ch1w+ch1m+ch3m+ch6m+ch1y";
 
 async function fetchJSON(url) {
   const res = await fetch(url, { headers: { "User-Agent": UA, "Accept": "application/json" } });
@@ -102,7 +102,7 @@ async function main() {
   }));
 
   // ---- Whole-market screen: 100%+ Club and Star Gainers in one call ----
-  let club = null, clubSource = null, starGainers = null, starsState = null;
+  let club = null, clubSource = null, starGainers = null, starsState = null, allGreen = null;
   try {
     const j = await fetchJSON(SCREEN_URL);
     const map = j?.data?.data || {};
@@ -150,6 +150,16 @@ async function main() {
         ytd: Number.isFinite(Number(map[t].chYTD)) ? +Number(map[t].chYTD).toFixed(2) : null }))
       .sort((a, b) => b.stars - a.stars || (b.ytd ?? -1e9) - (a.ytd ?? -1e9))
       .slice(0, 50);
+
+    // ---- All Green All Year: positive across 5D, 1M, 3M, 6M, YTD, 1Y ----
+    const P = x => { const n = Number(x); return Number.isFinite(n) ? n : null; };
+    allGreen = Object.entries(map)
+      .map(([t, v]) => ({ t, price: P(v.price), w: P(v.ch1w), m1: P(v.ch1m), m3: P(v.ch3m), m6: P(v.ch6m), ytd: P(v.chYTD), y1: P(v.ch1y) }))
+      .filter(r => r.price >= 1 && [r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].every(x => x != null && x > 0))
+      .sort((a, b) => b.ytd - a.ytd)
+      .slice(0, 50)
+      .map(r => ({ ...r, price: +r.price.toFixed(2), w: +r.w.toFixed(1), m1: +r.m1.toFixed(1), m3: +r.m3.toFixed(1), m6: +r.m6.toFixed(1), ytd: +r.ytd.toFixed(1), y1: +r.y1.toFixed(1) }));
+    if (!allGreen.length) allGreen = null;
   } catch (e) {
     console.warn("Market screen failed:", e.message);
   }
@@ -164,9 +174,10 @@ async function main() {
     clubSource,
     starGainers,
     starsState,
+    allGreen,
   };
   writeFileSync("data.json", JSON.stringify(payload));
-  console.log(`Wrote data.json — ${Object.keys(returns).length} tickers ok, ${failed} failed, club: ${club ? club.length : "unavailable"}, stars: ${starGainers ? starGainers.length : "unavailable"}`);
+  console.log(`Wrote data.json — ${Object.keys(returns).length} tickers ok, ${failed} failed, club: ${club ? club.length : "unavailable"}, stars: ${starGainers ? starGainers.length : "unavailable"}, green: ${allGreen ? allGreen.length : "unavailable"}`);
   if (Object.keys(returns).length < 10) process.exit(1); // don't commit a broken file
 }
 
