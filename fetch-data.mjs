@@ -104,7 +104,7 @@ async function main() {
   }));
 
   // ---- Whole-market screen: 100%+ Club and Star Gainers in one call ----
-  let club = null, clubSource = null, starGainers = null, starsState = null, allGreen = null, allRed = null;
+  let club = null, clubSource = null, starGainers = null, starsState = null, allGreen = null, allRed = null, oneMonthGainers = null;
   try {
     const j = await fetchJSON(SCREEN_URL);
     const map = j?.data?.data || {};
@@ -190,6 +190,21 @@ async function main() {
       .slice(0, 50)
       .map(r => ({ ...r, price: +r.price.toFixed(2), w: +r.w.toFixed(1), m1: +r.m1.toFixed(1), m3: +r.m3.toFixed(1), m6: +r.m6.toFixed(1), ytd: +r.ytd.toFixed(1), y1: +r.y1.toFixed(1), day: r.day != null ? +r.day.toFixed(1) : null }));
     if (!allRed.length) allRed = null;
+
+    // ---- 1 Month Gainers: 1M return > 10%, sorted by 1M descending ----
+    oneMonthGainers = Object.entries(map)
+      .map(([t, v]) => ({ t, price: P(v.price), w: P(v.ch1w), m1: P(v.ch1m), m3: P(v.ch3m), m6: P(v.ch6m), ytd: P(v.chYTD), y1: P(v.ch1y), day: P(v.change) }))
+      .filter(r => r.price >= 1 && r.m1 != null && r.m1 > 10)
+      .sort((a, b) => b.m1 - a.m1)
+      .slice(0, 50)
+      .map(r => ({
+        ...r, price: +r.price.toFixed(2),
+        w: r.w != null ? +r.w.toFixed(1) : null, m1: +r.m1.toFixed(1),
+        m3: r.m3 != null ? +r.m3.toFixed(1) : null, m6: r.m6 != null ? +r.m6.toFixed(1) : null,
+        ytd: r.ytd != null ? +r.ytd.toFixed(1) : null, y1: r.y1 != null ? +r.y1.toFixed(1) : null,
+        day: r.day != null ? +r.day.toFixed(1) : null,
+      }));
+    if (!oneMonthGainers.length) oneMonthGainers = null;
   } catch (e) {
     console.warn("Market screen failed:", e.message);
   }
@@ -206,9 +221,10 @@ async function main() {
     starsState,
     allGreen,
     allRed,
+    oneMonthGainers,
   };
   writeFileSync("data.json", JSON.stringify(payload));
-  console.log(`Wrote data.json — ${Object.keys(returns).length} tickers ok, ${failed} failed, club: ${club ? club.length : "unavailable"}, stars: ${starGainers ? starGainers.length : "unavailable"}, green: ${allGreen ? allGreen.length : "unavailable"}, red: ${allRed ? allRed.length : "unavailable"}`);
+  console.log(`Wrote data.json — ${Object.keys(returns).length} tickers ok, ${failed} failed, club: ${club ? club.length : "unavailable"}, stars: ${starGainers ? starGainers.length : "unavailable"}, green: ${allGreen ? allGreen.length : "unavailable"}, red: ${allRed ? allRed.length : "unavailable"}, oneMonth: ${oneMonthGainers ? oneMonthGainers.length : "unavailable"}`);
   if (Object.keys(returns).length < 10) process.exit(1); // don't commit a broken file
 }
 
