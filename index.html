@@ -385,7 +385,7 @@ async function fetchAllReturns(onProgress){
  *  STATE
  * ================================================================ */
 const state = {
-  expanded: { country:false, sector:false, foundation:false, all:false, club100:false, stars:false, green:false, red:false },
+  expanded: { country:false, sector:false, foundation:false, all:false, club100:false, stars:false, green:false, red:false, month1:false },
   selected: { country:new Set(), sector:new Set(), foundation:new Set(), club100:new Set(), stars:new Set() },
   family: null,
   timeframe: null,
@@ -401,6 +401,7 @@ const state = {
   starGainers: null,   // [{t, price, ytd, stars}] from data.json
   allGreen: null,      // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
   allRed: null,        // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
+  oneMonthGainers: null, // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
   searchReturns: {}    // period -> { TICKER: pct } when source === 'search'
 };
 const activePeriod = () => state.timeframe || "1D";
@@ -416,6 +417,11 @@ const priceFor = t => {
   if (state.source === "search") return null;
   const r = state.returns[t];
   return r && r.price != null ? r.price : null;
+};
+const dayFor = t => {
+  if (state.source === "search") return null;
+  const r = state.returns[t];
+  return r && r["1D"] != null ? r["1D"] : null;
 };
 // "YYYY-MM-DD" -> "MM/DD/YY"
 function fmtDate(d){
@@ -518,7 +524,7 @@ function render(){
     tfBody
     + '<div class="note">Country, sector, and foundation ETFs ranked by '+(state.timeframe?period+' return':"today's % change (1D)")+'. Tap a period above to switch to a longer window.</div>'
     + ranked.map((r,i)=>rowHTML({
-        rank:i+1,t:r.t,n:r.n,price:priceFor(r.t),ret:r.ret,showRet:true,
+        rank:i+1,t:r.t,n:r.n,day:dayFor(r.t),ret:r.ret,showRet:true,
         active:state.selected[r.origin].has(r.t),action:r.origin
       })).join('');
 
@@ -597,12 +603,28 @@ function render(){
         + '</tbody></table></div>'
       : '');
 
+  const month1Rows = state.oneMonthGainers || [];
+  const month1Body =
+    (month1Rows.length
+      ? '<div class="group-label">1-MONTH RETURN &gt; 10% \u00b7 ' + esc(fmtDate(state.dataAsOf) || "latest close") + '</div>'
+      : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
+    + '<div class="note">Stocks up more than 10% over the past month, price \u2265 $1. Highest 1M gain first.</div>'
+    + (month1Rows.length
+      ? '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
+        + month1Rows.map(r =>
+            '<tr><td>' + esc(r.t) + '</td>'
+            + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => '<td>' + (v != null ? (v>=0?'+':'')+v.toFixed(1) + '%' : '\u2014') + '</td>').join('')
+            + '</tr>').join('')
+        + '</tbody></table></div>'
+      : '');
+
   $("#main").innerHTML =
-      sectionHTML("all","01","Country, Sectors, and ETFs", 0, allBody)
+      sectionHTML("all","01","Base ETFs, Country, Sectors", 0, allBody)
     + sectionHTML("club100","02","The 100%+ Club YTD", state.selected.club100.size, clubBody)
     + sectionHTML("stars","03","Star Gainers", state.selected.stars.size, starsBody)
     + sectionHTML("green","04","All Green All Year", 0, greenBody)
     + sectionHTML("red","05","Shorts - All Red All Year", 0, redBody)
+    + sectionHTML("month1","06","1 Month Gainers", 0, month1Body)
     + '<div class="spacer"></div>';
 }
 
@@ -667,6 +689,7 @@ async function loadData(force){
         starGainers: j.starGainers || null,
         allGreen: j.allGreen || null,
         allRed: j.allRed || null,
+        oneMonthGainers: j.oneMonthGainers || null,
         clubSource: j.club ? (j.clubSource || "screen") : null,
         clubFetchedAt: j.generatedAt ? new Date(j.generatedAt) : null,
         loading: false
@@ -756,3 +779,4 @@ loadData(false);
 </script>
 </body>
 </html>
+
