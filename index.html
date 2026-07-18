@@ -90,6 +90,7 @@
   .apply { width:100%; display:flex; align-items:center; justify-content:center; gap:8px;
     background:var(--ink); color:var(--paper); font-weight:600; font-size:14px; border-radius:12px; padding:13px 0; }
   .apply .badge { background:var(--gold); color:var(--ink); }
+
   .gwrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
   .gtable { border-collapse:collapse; width:100%; min-width:430px; font-family:var(--mono); }
   .gtable th { font-size:9px; color:var(--ink-faint); letter-spacing:1px; text-align:right; padding:6px 4px; border-bottom:1px solid var(--line); font-weight:500; }
@@ -537,11 +538,13 @@ function render(){
     + (state.club ? ' End-of-day figures from a free full-market screen.' :
        ' Tap refresh to retry the live screen.')
     + '</div>'
-    + '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>TODAY</th><th>YTD</th></tr></thead><tbody>'
+    + '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
     + clubRows.map(r =>
         '<tr><td>' + esc(r.t) + '</td>'
         + '<td>' + (r.day != null ? (r.day>=0?'+':'')+r.day.toFixed(1)+'%' : '\u2014') + '</td>'
+        + [r.w, r.m1, r.m3, r.m6].map(v => '<td>' + (v != null ? (v>=0?'+':'')+v.toFixed(1)+'%' : '\u2014') + '</td>').join('')
         + '<td>' + (r.ytd != null ? (r.ytd>=0?'+':'')+r.ytd.toFixed(1)+'%' : '\u2014') + '</td>'
+        + '<td>' + (r.y1 != null ? (r.y1>=0?'+':'')+r.y1.toFixed(1)+'%' : '\u2014') + '</td>'
         + '</tr>').join('')
     + '</tbody></table></div>';
 
@@ -551,12 +554,14 @@ function render(){
       ? '<div class="group-label">NEW 1-YEAR HIGHS · DAILY STREAKS · ' + esc(fmtDate(state.dataAsOf) || "latest close") + '</div>'
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
     + '<div class="note">Stocks setting new 52-week highs (WSJ new-highs style). Every day a stock makes a new high adds a star, up to ★★★★★ \u2014 stars are cumulative and never reset, even after a missed day. Date shown is when the star was last added.</div>'
-    + '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>STARS</th><th>TODAY</th><th>YTD</th></tr></thead><tbody>'
+    + '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>STARS</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
     + starRows.map(r =>
         '<tr><td>' + esc(r.t) + '</td>'
         + '<td>' + "\u2605".repeat(Math.min(r.stars||1,5)) + (r.since?' \u00b7 '+fmtDate(r.since):'') + '</td>'
         + '<td>' + (r.day != null ? (r.day>=0?'+':'')+r.day.toFixed(1)+'%' : '\u2014') + '</td>'
+        + [r.w, r.m1, r.m3, r.m6].map(v => '<td>' + (v != null ? (v>=0?'+':'')+v.toFixed(1)+'%' : '\u2014') + '</td>').join('')
         + '<td>' + (r.ytd != null ? (r.ytd>=0?'+':'')+r.ytd.toFixed(1)+'%' : '\u2014') + '</td>'
+        + '<td>' + (r.y1 != null ? (r.y1>=0?'+':'')+r.y1.toFixed(1)+'%' : '\u2014') + '</td>'
         + '</tr>').join('')
     + '</tbody></table></div>';
 
