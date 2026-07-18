@@ -119,7 +119,7 @@ async function main() {
         w: RW(v.ch1w), m1: RW(v.ch1m), m3: RW(v.ch3m), m6: RW(v.ch6m), y1: RW(v.ch1y) }))
       .filter(r => Number.isFinite(r.price) && Number.isFinite(r.ytd) && r.price >= 1 && r.ytd > 100 && r.ytd <= YTD_SANITY_CAP)
       .sort((a, b) => b.ytd - a.ytd)
-      .slice(0, 50)
+      // No top-N cap here: every stock over 100% YTD (below the sanity cap) is included.
       .map(r => ({ ...r, price: +r.price.toFixed(2), ytd: +r.ytd.toFixed(2), day: Number.isFinite(r.day) ? +r.day.toFixed(2) : null }));
     if (rows.length) { club = rows; clubSource = "screen"; }
 
@@ -172,9 +172,9 @@ async function main() {
     const P = x => { const n = Number(x); return Number.isFinite(n) ? n : null; };
     allGreen = Object.entries(map)
       .map(([t, v]) => ({ t, price: P(v.price), w: P(v.ch1w), m1: P(v.ch1m), m3: P(v.ch3m), m6: P(v.ch6m), ytd: P(v.chYTD), y1: P(v.ch1y), day: P(v.change) }))
-      .filter(r => r.price >= 1 && r.ytd != null && r.ytd <= YTD_SANITY_CAP
+      .filter(r => r.price >= 1 && r.y1 != null && r.ytd != null && r.ytd <= YTD_SANITY_CAP
         && [r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].every(x => x != null && x > 0))
-      .sort((a, b) => b.ytd - a.ytd)
+      .sort((a, b) => b.y1 - a.y1) // top 50 by 1Y
       .slice(0, 50)
       .map(r => ({ ...r, price: +r.price.toFixed(2), w: +r.w.toFixed(1), m1: +r.m1.toFixed(1), m3: +r.m3.toFixed(1), m6: +r.m6.toFixed(1), ytd: +r.ytd.toFixed(1), y1: +r.y1.toFixed(1), day: r.day != null ? +r.day.toFixed(1) : null }));
     if (!allGreen.length) allGreen = null;
@@ -194,8 +194,8 @@ async function main() {
     // ---- 1 Month Gainers: 1M return > 10%, sorted by 1M descending ----
     oneMonthGainers = Object.entries(map)
       .map(([t, v]) => ({ t, price: P(v.price), w: P(v.ch1w), m1: P(v.ch1m), m3: P(v.ch3m), m6: P(v.ch6m), ytd: P(v.chYTD), y1: P(v.ch1y), day: P(v.change) }))
-      .filter(r => r.price >= 1 && r.m1 != null && r.m1 > 10)
-      .sort((a, b) => b.m1 - a.m1)
+      .filter(r => r.price >= 1 && r.m1 != null && r.m1 > 0)
+      .sort((a, b) => b.m1 - a.m1) // top 50 by 1M gain
       .slice(0, 50)
       .map(r => ({
         ...r, price: +r.price.toFixed(2),
