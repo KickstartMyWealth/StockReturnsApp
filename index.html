@@ -78,6 +78,7 @@
   .tick { font-family:var(--mono); font-size:13px; letter-spacing:0.5px; flex-shrink:0; }
   .name { font-size:12px; color:var(--ink-faint); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .price { font-family:var(--mono); font-size:11px; color:var(--ink-faint); flex-shrink:0; }
+  .price.pos { color:var(--teal); } .price.neg { color:var(--rust); }
   .ret { font-family:var(--mono); font-size:12px; font-weight:500; flex-shrink:0; padding-left:8px; }
   .ret.pos { color:var(--teal); } .ret.neg { color:var(--rust); }
 
@@ -95,10 +96,10 @@
   .gtable { border-collapse:collapse; width:100%; min-width:430px; font-family:var(--mono); }
   .gtable th { font-size:9px; color:var(--ink-faint); letter-spacing:1px; text-align:right; padding:6px 4px; border-bottom:1px solid var(--line); font-weight:500; }
   .gtable th:first-child { text-align:left; }
-  .gtable td { font-size:10.5px; text-align:right; padding:8px 4px; border-bottom:1px solid var(--line); color:var(--teal); white-space:nowrap; }
+  .gtable td { font-size:10.5px; text-align:right; padding:8px 4px; border-bottom:1px solid var(--line); color:var(--ink-faint); white-space:nowrap; }
   .gtable td:first-child { text-align:left; color:var(--ink); font-size:12px; letter-spacing:0.5px; }
-  .gtable.red td { color:var(--rust); }
-  .gtable.red td:first-child { color:var(--ink); }
+  .gtable td.pos { color:var(--teal); }
+  .gtable td.neg { color:var(--rust); }
 
   .spacer { height:24px; }
 </style>
@@ -442,10 +443,16 @@ function fmtRet(v){
   const cls = v >= 0 ? "pos" : "neg";
   return '<span class="ret '+cls+'">'+(v>=0?"+":"")+v.toFixed(2)+'%</span>';
 }
+// Table cell for a percentage value, colored green/red by sign.
+function pctTd(v, decimals){
+  if (v == null) return '<td>\u2014</td>';
+  const cls = v >= 0 ? "pos" : "neg";
+  return '<td class="'+cls+'">'+(v>=0?"+":"")+v.toFixed(decimals)+'%</td>';
+}
 
 function rowHTML({rank,t,n,price,day,ret,showRet,active,action}){
   const secondary = day!=null
-    ? '<span class="price">'+(day>=0?'+':'')+day.toFixed(2)+'%</span>'
+    ? '<span class="price '+(day>=0?'pos':'neg')+'">'+(day>=0?'+':'')+day.toFixed(2)+'%</span>'
     : (price!=null ? '<span class="price">$'+price.toFixed(2)+'</span>' : '');
   return '<button class="row'+(active?' active':'')+'" data-action="'+action+'" data-t="'+esc(t)+'">'
     + '<span class="row-left">'
@@ -547,10 +554,7 @@ function render(){
     + '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
     + clubRows.map(r =>
         '<tr><td>' + esc(r.t) + '</td>'
-        + '<td>' + (r.day != null ? (r.day>=0?'+':'')+r.day.toFixed(1)+'%' : '\u2014') + '</td>'
-        + [r.w, r.m1, r.m3, r.m6].map(v => '<td>' + (v != null ? (v>=0?'+':'')+v.toFixed(1)+'%' : '\u2014') + '</td>').join('')
-        + '<td>' + (r.ytd != null ? (r.ytd>=0?'+':'')+r.ytd.toFixed(1)+'%' : '\u2014') + '</td>'
-        + '<td>' + (r.y1 != null ? (r.y1>=0?'+':'')+r.y1.toFixed(1)+'%' : '\u2014') + '</td>'
+        + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
         + '</tr>').join('')
     + '</tbody></table></div>';
 
@@ -564,10 +568,7 @@ function render(){
     + starRows.map(r =>
         '<tr><td>' + esc(r.t) + '</td>'
         + '<td>' + "\u2605".repeat(Math.min(r.stars||1,5)) + (r.since?' \u00b7 '+fmtDate(r.since):'') + '</td>'
-        + '<td>' + (r.day != null ? (r.day>=0?'+':'')+r.day.toFixed(1)+'%' : '\u2014') + '</td>'
-        + [r.w, r.m1, r.m3, r.m6].map(v => '<td>' + (v != null ? (v>=0?'+':'')+v.toFixed(1)+'%' : '\u2014') + '</td>').join('')
-        + '<td>' + (r.ytd != null ? (r.ytd>=0?'+':'')+r.ytd.toFixed(1)+'%' : '\u2014') + '</td>'
-        + '<td>' + (r.y1 != null ? (r.y1>=0?'+':'')+r.y1.toFixed(1)+'%' : '\u2014') + '</td>'
+        + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
         + '</tr>').join('')
     + '</tbody></table></div>';
 
@@ -581,8 +582,7 @@ function render(){
       ? '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
         + greenRows.map(r =>
             '<tr><td>' + esc(r.t) + '</td>'
-            + '<td>' + (r.day != null ? (r.day>=0?'+':'')+r.day.toFixed(1) + '%' : '\u2014') + '</td>'
-            + [r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => '<td>' + (v != null ? v.toFixed(1) + '%' : '\u2014') + '</td>').join('')
+            + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
             + '</tr>').join('')
         + '</tbody></table></div>'
       : '');
@@ -594,11 +594,10 @@ function render(){
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
     + '<div class="note">Stocks red in all six windows \u2014 5-day, 1-month, 3-month, 6-month, YTD, and 1-year \u2014 price \u2265 $1. Worst YTD first.</div>'
     + (redRows.length
-      ? '<div class="gwrap"><table class="gtable red"><thead><tr><th>TICKER</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
+      ? '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
         + redRows.map(r =>
             '<tr><td>' + esc(r.t) + '</td>'
-            + '<td>' + (r.day != null ? r.day.toFixed(1) + '%' : '\u2014') + '</td>'
-            + [r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => '<td>' + (v != null ? v.toFixed(1) + '%' : '\u2014') + '</td>').join('')
+            + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
             + '</tr>').join('')
         + '</tbody></table></div>'
       : '');
@@ -613,7 +612,7 @@ function render(){
       ? '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
         + month1Rows.map(r =>
             '<tr><td>' + esc(r.t) + '</td>'
-            + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => '<td>' + (v != null ? (v>=0?'+':'')+v.toFixed(1) + '%' : '\u2014') + '</td>').join('')
+            + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
             + '</tr>').join('')
         + '</tbody></table></div>'
       : '');
@@ -779,4 +778,3 @@ loadData(false);
 </script>
 </body>
 </html>
-
