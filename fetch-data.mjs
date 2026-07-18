@@ -113,8 +113,10 @@ async function main() {
     // reverse-split-style data artifacts (e.g. a stock erroneously showing
     // +1,000,000% YTD) rather than genuine outsized winners.
     const YTD_SANITY_CAP = 2000; // percent
+    const RW = x => { const n = Number(x); return Number.isFinite(n) ? +n.toFixed(1) : null; };
     const rows = Object.entries(map)
-      .map(([t, v]) => ({ t, n: "", price: Number(v.price), ytd: Number(v.chYTD), day: Number(v.change) }))
+      .map(([t, v]) => ({ t, n: "", price: Number(v.price), ytd: Number(v.chYTD), day: Number(v.change),
+        w: RW(v.ch1w), m1: RW(v.ch1m), m3: RW(v.ch3m), m6: RW(v.ch6m), y1: RW(v.ch1y) }))
       .filter(r => Number.isFinite(r.price) && Number.isFinite(r.ytd) && r.price >= 1 && r.ytd > 100 && r.ytd <= YTD_SANITY_CAP)
       .sort((a, b) => b.ytd - a.ytd)
       .slice(0, 50)
@@ -157,10 +159,12 @@ async function main() {
       }
     }
     starsState = { day: sameDay ? prev.day : todayET, stars: newStars, highs: newHighs, since: newSince };
+    const RW2 = x => { const n = Number(x); return Number.isFinite(n) ? +n.toFixed(1) : null; };
     starGainers = Object.entries(newStars)
       .map(([t, stars]) => ({ t, stars, since: newSince[t] || null, price: +Number(map[t].price).toFixed(2),
         ytd: Number.isFinite(Number(map[t].chYTD)) ? +Number(map[t].chYTD).toFixed(2) : null,
-        day: Number.isFinite(Number(map[t].change)) ? +Number(map[t].change).toFixed(2) : null }))
+        day: Number.isFinite(Number(map[t].change)) ? +Number(map[t].change).toFixed(2) : null,
+        w: RW2(map[t].ch1w), m1: RW2(map[t].ch1m), m3: RW2(map[t].ch3m), m6: RW2(map[t].ch6m), y1: RW2(map[t].ch1y) }))
       .sort((a, b) => b.stars - a.stars || (b.ytd ?? -1e9) - (a.ytd ?? -1e9))
       .slice(0, 50);
 
