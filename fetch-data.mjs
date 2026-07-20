@@ -106,7 +106,7 @@ async function main() {
   }));
 
   // ---- Whole-market screen: 100%+ Club and Star Gainers in one call ----
-  let club = null, clubSource = null, starGainers = null, starsState = null, allGreen = null, allRed = null, oneMonthGainers = null;
+  let club = null, clubSource = null, starGainers = null, starsState = null, allGreen = null, allRed = null, oneMonthGainers = null, multiListed = null;
   try {
     const j = await fetchJSON(SCREEN_URL);
     const map = j?.data?.data || {};
@@ -212,6 +212,33 @@ async function main() {
         day: r.day != null ? +r.day.toFixed(1) : null,
       }));
     if (!oneMonthGainers.length) oneMonthGainers = null;
+
+    // ---- Tickers Listed Above Multiple Times: appears in 2+ of the four
+    // bullish lists (Club, Star Gainers, All Green, 1 Month Gainers).
+    // Shorts/All Red is intentionally excluded — it's a bearish list, not
+    // a buy signal. Overlap across bullish screens is a stronger signal
+    // than any single list on its own.
+    const CATS = { club: club || [], stars: starGainers || [], green: allGreen || [], month1: oneMonthGainers || [] };
+    const CAT_LABEL = { club: "100%", stars: "Stars", green: "Green", month1: "1M" };
+    const tickerCats = {}, tickerData = {};
+    for (const [cat, rows] of Object.entries(CATS)) {
+      for (const r of rows) {
+        if (!tickerCats[r.t]) tickerCats[r.t] = new Set();
+        tickerCats[r.t].add(cat);
+        if (!tickerData[r.t]) tickerData[r.t] = r;
+      }
+    }
+    multiListed = Object.entries(tickerCats)
+      .filter(([t, cats]) => cats.size >= 2)
+      .map(([t, cats]) => ({
+        ...tickerData[t],
+        t,
+        count: cats.size,
+        inLists: [...cats].map(c => CAT_LABEL[c]).join(", "),
+      }))
+      .sort((a, b) => b.count - a.count || (b.ytd ?? -1e9) - (a.ytd ?? -1e9))
+      .slice(0, 50);
+    if (!multiListed.length) multiListed = null;
   } catch (e) {
     console.warn("Market screen failed:", e.message);
   }
@@ -229,9 +256,10 @@ async function main() {
     allGreen,
     allRed,
     oneMonthGainers,
+    multiListed,
   };
   writeFileSync("data.json", JSON.stringify(payload));
-  console.log(`Wrote data.json — ${Object.keys(returns).length} tickers ok, ${failed} failed, club: ${club ? club.length : "unavailable"}, stars: ${starGainers ? starGainers.length : "unavailable"}, green: ${allGreen ? allGreen.length : "unavailable"}, red: ${allRed ? allRed.length : "unavailable"}, oneMonth: ${oneMonthGainers ? oneMonthGainers.length : "unavailable"}`);
+  console.log(`Wrote data.json — ${Object.keys(returns).length} tickers ok, ${failed} failed, club: ${club ? club.length : "unavailable"}, stars: ${starGainers ? starGainers.length : "unavailable"}, green: ${allGreen ? allGreen.length : "unavailable"}, red: ${allRed ? allRed.length : "unavailable"}, oneMonth: ${oneMonthGainers ? oneMonthGainers.length : "unavailable"}, multiListed: ${multiListed ? multiListed.length : "unavailable"}`);
   if (Object.keys(returns).length < 10) process.exit(1); // don't commit a broken file
 }
 
