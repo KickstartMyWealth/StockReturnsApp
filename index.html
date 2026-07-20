@@ -387,7 +387,7 @@ async function fetchAllReturns(onProgress){
  *  STATE
  * ================================================================ */
 const state = {
-  expanded: { country:false, sector:false, foundation:false, all:false, club100:false, stars:false, green:false, red:false, month1:false },
+  expanded: { country:false, sector:false, foundation:false, all:false, club100:false, stars:false, green:false, red:false, month1:false, multi:false },
   selected: { country:new Set(), sector:new Set(), foundation:new Set(), club100:new Set(), stars:new Set() },
   family: null,
   timeframe: null,
@@ -404,6 +404,7 @@ const state = {
   allGreen: null,      // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
   allRed: null,        // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
   oneMonthGainers: null, // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
+  multiListed: null,   // [{t, price, w, m1, m3, m6, ytd, y1, count, inLists}] from data.json
   searchReturns: {}    // period -> { TICKER: pct } when source === 'search'
 };
 const activePeriod = () => state.timeframe || "1D";
@@ -618,6 +619,22 @@ function render(){
         + '</tbody></table></div>'
       : '');
 
+  const multiRows = state.multiListed || [];
+  const multiBody =
+    (multiRows.length
+      ? '<div class="group-label">APPEARS IN 2+ BULLISH LISTS \u00b7 ' + esc(fmtDate(state.dataAsOf) || "latest close") + '</div>'
+      : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
+    + '<div class="note">Stocks showing up in 2 or more of: The 100%+ Club, Star Gainers, All Green, and 1 Month Gainers. Independent bullish signals lining up on the same ticker \u2014 sorted by how many lists it\u2019s in, then YTD.</div>'
+    + (multiRows.length
+      ? '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>IN</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
+        + multiRows.map(r =>
+            '<tr><td>' + esc(r.t) + '</td>'
+            + '<td>' + esc(r.inLists || '') + '</td>'
+            + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
+            + '</tr>').join('')
+        + '</tbody></table></div>'
+      : '');
+
   $("#main").innerHTML =
       sectionHTML("all","01","Base ETFs, Country, Sectors", 0, allBody)
     + sectionHTML("club100","02","The 100%+ Club YTD", state.selected.club100.size, clubBody)
@@ -625,6 +642,7 @@ function render(){
     + sectionHTML("green","04","All Green All Year", 0, greenBody)
     + sectionHTML("red","05","Shorts - All Red All Year", 0, redBody)
     + sectionHTML("month1","06","1 Month Gainers", 0, month1Body)
+    + sectionHTML("multi","07","Tickers Listed Above Multiple Times", 0, multiBody)
     + '<div class="spacer"></div>';
 }
 
@@ -690,6 +708,7 @@ async function loadData(force){
         allGreen: j.allGreen || null,
         allRed: j.allRed || null,
         oneMonthGainers: j.oneMonthGainers || null,
+        multiListed: j.multiListed || null,
         clubSource: j.club ? (j.clubSource || "screen") : null,
         clubFetchedAt: j.generatedAt ? new Date(j.generatedAt) : null,
         loading: false
