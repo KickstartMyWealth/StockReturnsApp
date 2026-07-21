@@ -389,7 +389,7 @@ async function fetchAllReturns(onProgress){
 const state = {
   expanded: { country:false, sector:false, foundation:false, all:false, club100:false, stars:false, green:false, red:false, month1:false, multi:false },
   selected: { country:new Set(), sector:new Set(), foundation:new Set(), club100:new Set(), stars:new Set() },
-  family: null,
+  family: "Schwab",
   timeframe: null,
   returns: {},         // ticker -> {asOf, price, 1M, 2M, ...}
   dataAsOf: null,      // latest market date in the data
@@ -425,6 +425,10 @@ const dayFor = t => {
   if (state.source === "search") return null;
   const r = state.returns[t];
   return r && r["1D"] != null ? r["1D"] : null;
+};
+const oneYearFor = t => {
+  const r = state.returns[t];
+  return r && r["1Y"] != null ? r["1Y"] : null;
 };
 // "YYYY-MM-DD" -> "MM/DD/YY"
 function fmtDate(d){
@@ -624,7 +628,7 @@ function render(){
     (multiRows.length
       ? '<div class="group-label">APPEARS IN 2+ BULLISH LISTS \u00b7 ' + esc(fmtDate(state.dataAsOf) || "latest close") + '</div>'
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
-    + '<div class="note">Stocks showing up in 2 or more of: The 100%+ Club, Star Gainers, All Green, and 1 Month Gainers. Independent bullish signals lining up on the same ticker \u2014 sorted by how many lists it\u2019s in, then YTD.</div>'
+    + '<div class="note">Stocks showing up in 2 or more of: The 100%+ Club, Star Gainers, All Green, and 1 Month Gainers. Independent bullish signals lining up on the same ticker \u2014 sorted by how many lists it\u2019s in, then 1-year return.</div>'
     + (multiRows.length
       ? '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>IN</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
         + multiRows.map(r =>
@@ -635,6 +639,23 @@ function render(){
         + '</tbody></table></div>'
       : '');
 
+  const activeFamily = state.family || "Schwab";
+  const foundationBody =
+    pillsHTML(FAMILIES, activeFamily, "family")
+    + '<div class="note">1-year return for each core ' + esc(activeFamily) + ' fund, by asset class.</div>'
+    + FOUNDATION_GROUPS.map(g => {
+        const rows = familyList(activeFamily).filter(r => r.group === g);
+        if (!rows.length) return '';
+        return '<div class="group-label">' + esc(g.toUpperCase()) + '</div>'
+          + '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>NAME</th><th>1Y</th></tr></thead><tbody>'
+          + rows.map(r =>
+              '<tr><td>' + esc(r.t) + '</td>'
+              + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.n) + '</td>'
+              + pctTd(oneYearFor(r.t), 1)
+              + '</tr>').join('')
+          + '</tbody></table></div>';
+      }).join('');
+
   $("#main").innerHTML =
       sectionHTML("all","01","Base ETFs, Country, Sectors", 0, allBody)
     + sectionHTML("club100","02","The 100%+ Club YTD", state.selected.club100.size, clubBody)
@@ -643,6 +664,7 @@ function render(){
     + sectionHTML("red","05","Shorts - All Red All Year", 0, redBody)
     + sectionHTML("month1","06","1 Month Gainers", 0, month1Body)
     + sectionHTML("multi","07","Tickers Listed Above Multiple Times", 0, multiBody)
+    + sectionHTML("foundation","08","Foundation ETFs", 0, foundationBody)
     + '<div class="spacer"></div>';
 }
 
