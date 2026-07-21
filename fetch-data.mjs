@@ -236,7 +236,7 @@ async function main() {
         count: cats.size,
         inLists: [...cats].map(c => CAT_LABEL[c]).join(", "),
       }))
-      .sort((a, b) => b.count - a.count || (b.ytd ?? -1e9) - (a.ytd ?? -1e9))
+      .sort((a, b) => b.count - a.count || (b.y1 ?? -1e9) - (a.y1 ?? -1e9))
       .slice(0, 50);
     if (!multiListed.length) multiListed = null;
   } catch (e) {
