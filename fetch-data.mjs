@@ -73,6 +73,7 @@ function computeReturns(hist) {
       if (new Date(hist[i].d + "T00:00:00") <= target) return hist[i].c;
     return hist[0].c;
   };
+  const minusDays = d0 => { const d = new Date(lastDate); d.setDate(d.getDate() - d0); return d; };
   const minusMonths = m => { const d = new Date(lastDate); d.setMonth(d.getMonth() - m); return d; };
   const jan1 = new Date(lastDate.getFullYear(), 0, 1);
   const yearAgo = new Date(lastDate); yearAgo.setFullYear(yearAgo.getFullYear() - 1);
@@ -82,9 +83,11 @@ function computeReturns(hist) {
     asOf: last.d,
     price: +last.c.toFixed(2),
     "1D": pct(prevClose), // actual prior-close-to-last-close daily change
+    "5D": pct(closeOnOrBefore(minusDays(7))), // ~1 trading week back
     "1M": pct(closeOnOrBefore(minusMonths(1))),
     "2M": pct(closeOnOrBefore(minusMonths(2))),
     "3M": pct(closeOnOrBefore(minusMonths(3))),
+    "6M": pct(closeOnOrBefore(minusMonths(6))),
     YTD: pct(closeOnOrBefore(jan1)),
     "1Y": pct(closeOnOrBefore(yearAgo)),
   };
