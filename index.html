@@ -71,8 +71,8 @@
   .row { width:100%; display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--line); text-align:left; }
   .row-left { display:flex; align-items:center; gap:12px; min-width:0; }
   .rank { font-family:var(--mono); font-size:10px; color:var(--ink-faint); width:20px; flex-shrink:0; }
-
   .marker { width:16px; height:16px; border-radius:9999px; border:1.5px solid var(--line); flex-shrink:0;
+
     display:inline-flex; align-items:center; justify-content:center; }
   .row.active .marker { border-color:var(--gold); background:var(--gold); }
   .row.active .marker::after { content:''; width:6px; height:6px; border-radius:9999px; background:var(--ink); }
@@ -437,7 +437,7 @@ const retField = (t, key) => {
  * Resolves a name via stockanalysis.com's global search API, then pulls
  * the same return metrics used everywhere else from their screener. */
 const SEARCH_QUERY_URL = q => "https://stockanalysis.com/api/search?q=" + encodeURIComponent(q);
-const SEARCH_DATA_URL = "https://stockanalysis.com/_api/endpoints/screener/data-points?type=s&ids=chYTD+price+ch1w+ch1m+ch3m+ch6m+ch1y+chang+name";
+const SEARCH_DATA_URL = "https://stockanalysis.com/_api/endpoints/screener/data-points?type=s&ids=chYTD+price+ch1w+ch1m+ch3m+ch6m+ch1y+change+name";
 
 function findListings(t){
   const labels = [];
@@ -480,7 +480,7 @@ async function resolveTicker(query){
   if (!map[sym]) throw new Error("no data");
   // Prefer the screener's own name (kept consistent with the ticker-lookup
   // path above); fall back to whatever the search API returned.
-  const name = map[sym].name || first.name || first.n || first.companyName || sym);
+  const name = map[sym].name || first.name || first.n || first.companyName || sym;
   return { t: sym, n: name, v: map[sym] };
 }
 
