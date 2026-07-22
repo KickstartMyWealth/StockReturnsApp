@@ -437,7 +437,7 @@ const retField = (t, key) => {
  * Resolves a name via stockanalysis.com's global search API, then pulls
  * the same return metrics used everywhere else from their screener. */
 const SEARCH_QUERY_URL = q => "https://stockanalysis.com/api/search?q=" + encodeURIComponent(q);
-const SEARCH_DATA_URL = "https://stockanalysis.com/_api/endpoints/screener/data-points?type=s&ids=chYTD+price+ch1w+ch1m+ch3m+ch6m+ch1y+change";
+const SEARCH_DATA_URL = "https://stockanalysis.com/_api/endpoints/screener/data-points?type=s&ids=chYTD+price+ch1w+ch1m+ch3m+ch6m+ch1y+chang+name";
 
 function findListings(t){
   const labels = [];
@@ -461,9 +461,10 @@ async function resolveTicker(query){
   if (!q) throw new Error("empty");
   const guess = q.toUpperCase().replace(/[^A-Z.]/g, "");
   // If the input already looks like a bare ticker, try it directly first.
+  // The screener's own "name" field is the company name for this case.
   if (guess && guess.length <= 5 && /^[A-Z.]+$/.test(guess)){
     const map = await fetchScreenerMap();
-    if (map[guess]) return { t: guess, n: guess, v: map[guess] };
+    if (map[guess]) return { t: guess, n: map[guess].name || guess, v: map[guess] };
   }
   // Otherwise resolve a company name via the search API.
   const searchText = await fetchWithProxies(SEARCH_QUERY_URL(q));
@@ -475,9 +476,11 @@ async function resolveTicker(query){
     || candidates.find(c => c && (c.symbol || c.s || c.ticker));
   if (!first) throw new Error("not found");
   const sym = String(first.symbol || first.s || first.ticker).toUpperCase();
-  const name = first.name || first.n || first.companyName || sym;
   const map = await fetchScreenerMap();
   if (!map[sym]) throw new Error("no data");
+  // Prefer the screener's own name (kept consistent with the ticker-lookup
+  // path above); fall back to whatever the search API returned.
+  const name = map[sym].name || first.name || first.n || first.companyName || sym);
   return { t: sym, n: name, v: map[sym] };
 }
 
