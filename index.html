@@ -71,6 +71,7 @@
   .row { width:100%; display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--line); text-align:left; }
   .row-left { display:flex; align-items:center; gap:12px; min-width:0; }
   .rank { font-family:var(--mono); font-size:10px; color:var(--ink-faint); width:20px; flex-shrink:0; }
+
   .marker { width:16px; height:16px; border-radius:9999px; border:1.5px solid var(--line); flex-shrink:0;
     display:inline-flex; align-items:center; justify-content:center; }
   .row.active .marker { border-color:var(--gold); background:var(--gold); }
@@ -146,7 +147,6 @@ const COUNTRY_ETFS = [
   {t:"EWZ",n:"Brazil",grp:"Emerging"},{t:"EWW",n:"Mexico",grp:"Emerging"},
   {t:"EWT",n:"Taiwan",grp:"Emerging"},{t:"EZA",n:"South Africa",grp:"Emerging"},
   {t:"INDA",n:"India",grp:"Emerging"},{t:"MCHI",n:"China (MSCI)",grp:"Emerging"},
-
   {t:"FXI",n:"China Large-Cap",grp:"Emerging"},{t:"THD",n:"Thailand",grp:"Emerging"},
   {t:"TUR",n:"Turkey",grp:"Emerging"},{t:"EPOL",n:"Poland",grp:"Emerging"},
   {t:"ECH",n:"Chile",grp:"Emerging"},{t:"EPU",n:"Peru",grp:"Emerging"},
@@ -388,7 +388,7 @@ async function fetchAllReturns(onProgress){
  *  STATE
  * ================================================================ */
 const state = {
-  expanded: { country:false, sector:false, foundation:false, all:false, club100:false, stars:false, green:false, red:false, month1:false, multi:false },
+  expanded: { country:false, sector:false, foundation:false, all:false, club100:false, stars:false, green:false, red:false, month1:false, multi:false, search:false },
   selected: { country:new Set(), sector:new Set(), foundation:new Set(), club100:new Set(), stars:new Set() },
   family: "Schwab",
   timeframe: null,
@@ -406,6 +406,7 @@ const state = {
   allRed: null,        // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
   oneMonthGainers: null, // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
   multiListed: null,   // [{t, price, w, m1, m3, m6, ytd, y1, count, inLists}] from data.json
+  search: { query: "", loading: false, error: null, result: null },
   searchReturns: {}    // period -> { TICKER: pct } when source === 'search'
 };
 const activePeriod = () => state.timeframe || "1D";
@@ -431,6 +432,77 @@ const retField = (t, key) => {
   const r = state.returns[t];
   return r && r[key] != null ? r[key] : null;
 };
+
+/* ---- Search: any US-listed stock/ETF by ticker or company name ----
+ * Resolves a name via stockanalysis.com's global search API, then pulls
+ * the same return metrics used everywhere else from their screener. */
+const SEARCH_QUERY_URL = q => "https://stockanalysis.com/api/search?q=" + encodeURIComponent(q);
+const SEARCH_DATA_URL = "https://stockanalysis.com/_api/endpoints/screener/data-points?type=s&ids=chYTD+price+ch1w+ch1m+ch3m+ch6m+ch1y+change";
+
+function findListings(t){
+  const labels = [];
+  const inArr = arr => Array.isArray(arr) && arr.some(r => r.t === t);
+  if (inArr(state.club)) labels.push("100%+ Club");
+  if (inArr(state.starGainers)) labels.push("Star Gainers");
+  if (inArr(state.allGreen)) labels.push("All Green");
+  if (inArr(state.allRed)) labels.push("Shorts (All Red)");
+  if (inArr(state.oneMonthGainers)) labels.push("1 Month Gainers");
+  return labels;
+}
+
+async function fetchScreenerMap(){
+  const text = await fetchWithProxies(SEARCH_DATA_URL);
+  const j = JSON.parse(text);
+  return (j && j.data && j.data.data) || {};
+}
+
+async function resolveTicker(query){
+  const q = query.trim();
+  if (!q) throw new Error("empty");
+  const guess = q.toUpperCase().replace(/[^A-Z.]/g, "");
+  // If the input already looks like a bare ticker, try it directly first.
+  if (guess && guess.length <= 5 && /^[A-Z.]+$/.test(guess)){
+    const map = await fetchScreenerMap();
+    if (map[guess]) return { t: guess, n: guess, v: map[guess] };
+  }
+  // Otherwise resolve a company name via the search API.
+  const searchText = await fetchWithProxies(SEARCH_QUERY_URL(q));
+  const sj = JSON.parse(searchText);
+  const candidates = Array.isArray(sj) ? sj : (sj.data || sj.results || sj.stocks || sj.symbols || []);
+  // Prefer a primary US listing (type "s" = stock, "e" = ETF) over foreign
+  // cross-listings (type "sy"), which use prefixed symbols like "bcba/NOWD".
+  const first = candidates.find(c => c && c.s && (c.t === "s" || c.t === "e"))
+    || candidates.find(c => c && (c.symbol || c.s || c.ticker));
+  if (!first) throw new Error("not found");
+  const sym = String(first.symbol || first.s || first.ticker).toUpperCase();
+  const name = first.name || first.n || first.companyName || sym;
+  const map = await fetchScreenerMap();
+  if (!map[sym]) throw new Error("no data");
+  return { t: sym, n: name, v: map[sym] };
+}
+
+async function performSearch(){
+  const input = $("#searchInput");
+  const q = input ? input.value : state.search.query;
+  if (!q || !q.trim()) return;
+  state.search.query = q;
+  state.search.loading = true; state.search.error = null; state.search.result = null;
+  render();
+  try {
+    const { t, n, v } = await resolveTicker(q);
+    const num = x => { const nn = Number(x); return Number.isFinite(nn) ? nn : null; };
+    state.search.result = {
+      t, n,
+      day: num(v.change), w: num(v.ch1w), m1: num(v.ch1m), m3: num(v.ch3m),
+      m6: num(v.ch6m), ytd: num(v.chYTD), y1: num(v.ch1y),
+      inLists: findListings(t)
+    };
+  } catch (e) {
+    state.search.error = "Couldn't find that ticker or company. Try the exact ticker symbol.";
+  }
+  state.search.loading = false;
+  render();
+}
 // "YYYY-MM-DD" -> "MM/DD/YY"
 function fmtDate(d){
   if (!d) return null;
@@ -444,6 +516,7 @@ function fmtDate(d){
  * ================================================================ */
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
 function fmtRet(v){
   if (v == null) return '<span class="ret" style="color:var(--ink-faint)">—</span>';
   const cls = v >= 0 ? "pos" : "neg";
@@ -656,6 +729,27 @@ function render(){
           + '</tbody></table></div>';
       }).join('');
 
+  const sr = state.search.result;
+  const searchBody =
+    '<div class="note">Search any US-listed stock or ETF by ticker or company name.</div>'
+    + '<div class="pills" style="align-items:center;flex-wrap:nowrap;">'
+    + '<input id="searchInput" type="text" placeholder="e.g. ServiceNow or NOW" value="' + esc(state.search.query || '') + '" '
+      + 'style="flex:1;min-width:0;font-family:var(--mono);font-size:13px;padding:8px 12px;border:1.5px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);" />'
+    + '<button class="pill" data-action="doSearch" style="border-color:var(--gold);background:var(--gold-soft);color:var(--teal);flex-shrink:0;">Search</button>'
+    + '</div>'
+    + (state.search.loading ? '<div class="note">Searching…</div>' : '')
+    + (state.search.error ? '<div class="note warn">' + esc(state.search.error) + '</div>' : '')
+    + (sr
+      ? '<div class="group-label">' + (sr.inLists.length
+            ? 'TICKERS LISTED ABOVE \u00b7 ' + esc(sr.inLists.join(', ').toUpperCase())
+            : 'NOT CURRENTLY IN ANY FILTER ABOVE') + '</div>'
+        + '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>NAME</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
+        + '<tr><td>' + esc(sr.t) + '</td>'
+        + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(sr.n) + '</td>'
+        + [sr.day, sr.w, sr.m1, sr.m3, sr.m6, sr.ytd, sr.y1].map(v => pctTd(v, 1)).join('')
+        + '</tr></tbody></table></div>'
+      : '');
+
   $("#main").innerHTML =
       sectionHTML("all","01","Base ETFs, Country, Sectors", 0, allBody)
     + sectionHTML("club100","02","The 100%+ Club YTD", state.selected.club100.size, clubBody)
@@ -665,6 +759,7 @@ function render(){
     + sectionHTML("month1","06","1 Month Gainers", 0, month1Body)
     + sectionHTML("multi","07","Tickers Listed Above Multiple Times", 0, multiBody)
     + sectionHTML("foundation","08","Foundation ETFs", 0, foundationBody)
+    + sectionHTML("search","09","Search", 0, searchBody)
     + '<div class="spacer"></div>';
 }
 
@@ -680,7 +775,10 @@ document.addEventListener("click", e => {
     render(); return;
   }
   const a = el.dataset.action;
-  if (a === "timeframe"){
+  if (a === "doSearch"){
+    performSearch();
+    return;
+  } else if (a === "timeframe"){
     state.timeframe = state.timeframe === el.dataset.v ? null : el.dataset.v;
     ensurePeriod();
   } else if (a === "family"){
@@ -698,6 +796,19 @@ document.addEventListener("click", e => {
 });
 
 $("#refreshBtn").addEventListener("click", () => loadData(true));
+
+// Keep the search box's typed value in state (without a full re-render per
+// keystroke) so it survives re-renders triggered by unrelated actions.
+document.addEventListener("input", e => {
+  if (e.target && e.target.id === "searchInput") state.search.query = e.target.value;
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "Enter" && e.target && e.target.id === "searchInput"){
+    e.preventDefault();
+    performSearch();
+  }
+});
+
 /* ================================================================ *
  *  BOOT
  * ================================================================ */
