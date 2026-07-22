@@ -146,6 +146,7 @@ const COUNTRY_ETFS = [
   {t:"EWZ",n:"Brazil",grp:"Emerging"},{t:"EWW",n:"Mexico",grp:"Emerging"},
   {t:"EWT",n:"Taiwan",grp:"Emerging"},{t:"EZA",n:"South Africa",grp:"Emerging"},
   {t:"INDA",n:"India",grp:"Emerging"},{t:"MCHI",n:"China (MSCI)",grp:"Emerging"},
+
   {t:"FXI",n:"China Large-Cap",grp:"Emerging"},{t:"THD",n:"Thailand",grp:"Emerging"},
   {t:"TUR",n:"Turkey",grp:"Emerging"},{t:"EPOL",n:"Poland",grp:"Emerging"},
   {t:"ECH",n:"Chile",grp:"Emerging"},{t:"EPU",n:"Peru",grp:"Emerging"},
@@ -426,9 +427,9 @@ const dayFor = t => {
   const r = state.returns[t];
   return r && r["1D"] != null ? r["1D"] : null;
 };
-const oneYearFor = t => {
+const retField = (t, key) => {
   const r = state.returns[t];
-  return r && r["1Y"] != null ? r["1Y"] : null;
+  return r && r[key] != null ? r[key] : null;
 };
 // "YYYY-MM-DD" -> "MM/DD/YY"
 function fmtDate(d){
@@ -443,7 +444,6 @@ function fmtDate(d){
  * ================================================================ */
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-
 function fmtRet(v){
   if (v == null) return '<span class="ret" style="color:var(--ink-faint)">—</span>';
   const cls = v >= 0 ? "pos" : "neg";
@@ -642,16 +642,16 @@ function render(){
   const activeFamily = state.family || "Schwab";
   const foundationBody =
     pillsHTML(FAMILIES, activeFamily, "family")
-    + '<div class="note">1-year return for each core ' + esc(activeFamily) + ' fund, by asset class.</div>'
+    + '<div class="note">Returns for each core ' + esc(activeFamily) + ' fund, by asset class.</div>'
     + FOUNDATION_GROUPS.map(g => {
         const rows = familyList(activeFamily).filter(r => r.group === g);
         if (!rows.length) return '';
         return '<div class="group-label">' + esc(g.toUpperCase()) + '</div>'
-          + '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>NAME</th><th>1Y</th></tr></thead><tbody>'
+          + '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>NAME</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
           + rows.map(r =>
               '<tr><td>' + esc(r.t) + '</td>'
               + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.n) + '</td>'
-              + pctTd(oneYearFor(r.t), 1)
+              + ["1D","5D","1M","3M","6M","YTD","1Y"].map(k => pctTd(retField(r.t, k), 1)).join('')
               + '</tr>').join('')
           + '</tbody></table></div>';
       }).join('');
@@ -698,7 +698,6 @@ document.addEventListener("click", e => {
 });
 
 $("#refreshBtn").addEventListener("click", () => loadData(true));
-
 /* ================================================================ *
  *  BOOT
  * ================================================================ */
@@ -820,4 +819,3 @@ loadData(false);
 </script>
 </body>
 </html>
-
