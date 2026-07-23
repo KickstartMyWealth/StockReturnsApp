@@ -451,8 +451,12 @@ function findListings(t){
 }
 
 async function fetchScreenerMap(){
-  const text = await fetchWithProxies(SEARCH_DATA_URL);
-  const j = JSON.parse(text);
+  // stockanalysis.com allows cross-origin requests directly; going through
+  // the CORS proxies here would fail (their size limits reject this ~1MB
+  // full-market payload), so this one bypasses fetchWithProxies on purpose.
+  const res = await fetch(SEARCH_DATA_URL, { signal: AbortSignal.timeout(15000) });
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  const j = await res.json();
   return (j && j.data && j.data.data) || {};
 }
 
@@ -466,8 +470,11 @@ async function resolveTicker(query){
     const map = await fetchScreenerMap();
     if (map[guess]) return { t: guess, n: map[guess].name || guess, v: map[guess] };
   }
-  // Otherwise resolve a company name via the search API.
-  const searchText = await fetchWithProxies(SEARCH_QUERY_URL(q));
+  // Otherwise resolve a company name via the search API (also fetched
+  // directly for the same reason as fetchScreenerMap above).
+  const searchRes = await fetch(SEARCH_QUERY_URL(q), { signal: AbortSignal.timeout(15000) });
+  if (!searchRes.ok) throw new Error("HTTP " + searchRes.status);
+  const searchText = await searchRes.text();
   const sj = JSON.parse(searchText);
   const candidates = Array.isArray(sj) ? sj : (sj.data || sj.results || sj.stocks || sj.symbols || []);
   // Prefer a primary US listing (type "s" = stock, "e" = ETF) over foreign
