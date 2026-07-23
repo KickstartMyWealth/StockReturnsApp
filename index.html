@@ -69,10 +69,10 @@
   .note.warn { color:var(--rust); }
 
   .row { width:100%; display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--line); text-align:left; }
+
   .row-left { display:flex; align-items:center; gap:12px; min-width:0; }
   .rank { font-family:var(--mono); font-size:10px; color:var(--ink-faint); width:20px; flex-shrink:0; }
   .marker { width:16px; height:16px; border-radius:9999px; border:1.5px solid var(--line); flex-shrink:0;
-
     display:inline-flex; align-items:center; justify-content:center; }
   .row.active .marker { border-color:var(--gold); background:var(--gold); }
   .row.active .marker::after { content:''; width:6px; height:6px; border-radius:9999px; background:var(--ink); }
@@ -437,7 +437,14 @@ const retField = (t, key) => {
  * Resolves a name via stockanalysis.com's global search API, then pulls
  * the same return metrics used everywhere else from their screener. */
 const SEARCH_QUERY_URL = q => "https://stockanalysis.com/api/search?q=" + encodeURIComponent(q);
-const SEARCH_DATA_URL = "https://stockanalysis.com/_api/endpoints/screener/data-points?type=s&ids=chYTD+price+ch1w+ch1m+ch3m+ch6m+ch1y+change+name";
+const SEARCH_FIELDS = "chYTD+price+ch1w+ch1m+ch3m+ch6m+ch1y+change+name";
+// The screener's "type" param splits stocks (s) from ETFs (e) into separate
+// universes — a ticker like SMH or QQQ is absent from type=s entirely, so
+// both are fetched and merged into one combined lookup map.
+const SEARCH_DATA_URLS = [
+  "https://stockanalysis.com/_api/endpoints/screener/data-points?type=s&ids=" + SEARCH_FIELDS,
+  "https://stockanalysis.com/_api/endpoints/screener/data-points?type=e&ids=" + SEARCH_FIELDS,
+];
 
 function findListings(t){
   const labels = [];
@@ -450,14 +457,21 @@ function findListings(t){
   return labels;
 }
 
+let _screenerMapCache = null;
 async function fetchScreenerMap(){
+  if (_screenerMapCache) return _screenerMapCache;
   // stockanalysis.com allows cross-origin requests directly; going through
-  // the CORS proxies here would fail (their size limits reject this ~1MB
-  // full-market payload), so this one bypasses fetchWithProxies on purpose.
-  const res = await fetch(SEARCH_DATA_URL, { signal: AbortSignal.timeout(15000) });
-  if (!res.ok) throw new Error("HTTP " + res.status);
-  const j = await res.json();
-  return (j && j.data && j.data.data) || {};
+  // the CORS proxies here would fail (their size limits reject this ~1-2MB
+  // full-market payload), so these bypass fetchWithProxies on purpose.
+  const maps = await Promise.all(SEARCH_DATA_URLS.map(async url => {
+    const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const j = await res.json();
+    return (j && j.data && j.data.data) || {};
+  }));
+  const merged = Object.assign({}, ...maps); // stocks + ETFs combined
+  _screenerMapCache = merged;
+  return merged;
 }
 
 async function resolveTicker(query){
