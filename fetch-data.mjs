@@ -19,7 +19,7 @@ const UNIQUE_TICKERS = [
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36";
 const YAHOO = t => `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(t)}?range=1y&interval=1d`;
 const STOOQ = t => `https://stooq.com/q/d/l/?s=${t.toLowerCase()}.us&i=d`;
-const SCREEN_URL = "https://stockanalysis.com/_api/endpoints/screener/data-points?type=s&ids=chYTD+price+high52+ch1w+ch1m+ch3m+ch6m+ch1y+change+volume";
+const SCREEN_URL = "https://stockanalysis.com/_api/endpoints/screener/data-points?type=s&ids=chYTD+price+high52+ch1w+ch1m+ch3m+ch6m+ch1y+change+volume+sector";
 const MIN_VOLUME = 10000; // shares/day floor; below this, real-world tradability is unreliable (thin books, wide spreads, broker restrictions on newly-listed micro-caps)
 
 async function fetchJSON(url) {
@@ -120,7 +120,7 @@ async function main() {
     const YTD_SANITY_CAP = 2000; // percent
     const RW = x => { const n = Number(x); return Number.isFinite(n) ? +n.toFixed(1) : null; };
     const rows = Object.entries(map)
-      .map(([t, v]) => ({ t, n: "", price: Number(v.price), ytd: Number(v.chYTD), day: Number(v.change),
+      .map(([t, v]) => ({ t, n: "", sector: v.sector || null, price: Number(v.price), ytd: Number(v.chYTD), day: Number(v.change),
         w: RW(v.ch1w), m1: RW(v.ch1m), m3: RW(v.ch3m), m6: RW(v.ch6m), y1: RW(v.ch1y), volume: Number(v.volume) }))
       .filter(r => Number.isFinite(r.price) && Number.isFinite(r.ytd) && r.price >= 1 && r.ytd > 100 && r.ytd <= YTD_SANITY_CAP
         && Number.isFinite(r.volume) && r.volume >= MIN_VOLUME)
@@ -145,6 +145,7 @@ async function main() {
     // Cumulative, never resets: a star is added on any day a stock sets a new
     // 52-week high, up to 5 total. Missed days simply don't add a star; they
     // don't remove one. "since" tracks the most recent date a star was added.
+
     const newStars = {}, newHighs = {}, newSince = {};
     for (const [t, v] of Object.entries(map)) {
       const price = Number(v.price), high = Number(v.high52), volume = Number(v.volume);
@@ -168,7 +169,7 @@ async function main() {
     starsState = { day: sameDay ? prev.day : todayET, stars: newStars, highs: newHighs, since: newSince };
     const RW2 = x => { const n = Number(x); return Number.isFinite(n) ? +n.toFixed(1) : null; };
     starGainers = Object.entries(newStars)
-      .map(([t, stars]) => ({ t, stars, since: newSince[t] || null, price: +Number(map[t].price).toFixed(2),
+      .map(([t, stars]) => ({ t, stars, since: newSince[t] || null, sector: map[t]?.sector || null, price: +Number(map[t].price).toFixed(2),
         ytd: Number.isFinite(Number(map[t].chYTD)) ? +Number(map[t].chYTD).toFixed(2) : null,
         day: Number.isFinite(Number(map[t].change)) ? +Number(map[t].change).toFixed(2) : null,
         w: RW2(map[t].ch1w), m1: RW2(map[t].ch1m), m3: RW2(map[t].ch3m), m6: RW2(map[t].ch6m), y1: RW2(map[t].ch1y) }))
@@ -178,7 +179,7 @@ async function main() {
     // ---- All Green All Year: positive across 5D, 1M, 3M, 6M, YTD, 1Y ----
     const P = x => { const n = Number(x); return Number.isFinite(n) ? n : null; };
     allGreen = Object.entries(map)
-      .map(([t, v]) => ({ t, price: P(v.price), w: P(v.ch1w), m1: P(v.ch1m), m3: P(v.ch3m), m6: P(v.ch6m), ytd: P(v.chYTD), y1: P(v.ch1y), day: P(v.change), volume: Number(v.volume) }))
+      .map(([t, v]) => ({ t, sector: v.sector || null, price: P(v.price), w: P(v.ch1w), m1: P(v.ch1m), m3: P(v.ch3m), m6: P(v.ch6m), ytd: P(v.chYTD), y1: P(v.ch1y), day: P(v.change), volume: Number(v.volume) }))
       .filter(r => r.price >= 1 && r.y1 != null && r.ytd != null && r.ytd <= YTD_SANITY_CAP
         && Number.isFinite(r.volume) && r.volume >= MIN_VOLUME
         && [r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].every(x => x != null && x > 0))
@@ -191,7 +192,7 @@ async function main() {
     // Mirror of All Green; -100% is already a natural floor for a losing
     // stock, so no sanity cap is needed here the way the upside had one.
     allRed = Object.entries(map)
-      .map(([t, v]) => ({ t, price: P(v.price), w: P(v.ch1w), m1: P(v.ch1m), m3: P(v.ch3m), m6: P(v.ch6m), ytd: P(v.chYTD), y1: P(v.ch1y), day: P(v.change), volume: Number(v.volume) }))
+      .map(([t, v]) => ({ t, sector: v.sector || null, price: P(v.price), w: P(v.ch1w), m1: P(v.ch1m), m3: P(v.ch3m), m6: P(v.ch6m), ytd: P(v.chYTD), y1: P(v.ch1y), day: P(v.change), volume: Number(v.volume) }))
       .filter(r => r.price >= 1
         && Number.isFinite(r.volume) && r.volume >= MIN_VOLUME
         && [r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].every(x => x != null && x < 0))
@@ -202,7 +203,7 @@ async function main() {
 
     // ---- 1 Month Gainers: 1M return > 10%, sorted by 1M descending ----
     oneMonthGainers = Object.entries(map)
-      .map(([t, v]) => ({ t, price: P(v.price), w: P(v.ch1w), m1: P(v.ch1m), m3: P(v.ch3m), m6: P(v.ch6m), ytd: P(v.chYTD), y1: P(v.ch1y), day: P(v.change), volume: Number(v.volume) }))
+      .map(([t, v]) => ({ t, sector: v.sector || null, price: P(v.price), w: P(v.ch1w), m1: P(v.ch1m), m3: P(v.ch3m), m6: P(v.ch6m), ytd: P(v.chYTD), y1: P(v.ch1y), day: P(v.change), volume: Number(v.volume) }))
       .filter(r => r.price >= 1 && r.m1 != null && r.m1 > 0
         && Number.isFinite(r.volume) && r.volume >= MIN_VOLUME)
       .sort((a, b) => b.m1 - a.m1) // top 50 by 1M gain
@@ -267,4 +268,3 @@ async function main() {
 }
 
 main();
-
