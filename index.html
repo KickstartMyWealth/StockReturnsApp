@@ -66,10 +66,10 @@
 
   .group-label { font-family:var(--mono); font-size:10px; color:var(--teal); letter-spacing:1.5px; padding:10px 0 2px; }
   .note { font-size:11px; color:var(--ink-faint); padding-bottom:8px; }
+
   .note.warn { color:var(--rust); }
 
   .row { width:100%; display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--line); text-align:left; }
-
   .row-left { display:flex; align-items:center; gap:12px; min-width:0; }
   .rank { font-family:var(--mono); font-size:10px; color:var(--ink-faint); width:20px; flex-shrink:0; }
   .marker { width:16px; height:16px; border-radius:9999px; border:1.5px solid var(--line); flex-shrink:0;
@@ -217,6 +217,7 @@ const PROXIES = [
 const STOOQ_HISTORY = t => "https://stooq.com/q/d/l/?s=" + t.toLowerCase() + ".us&i=d";
 const CACHE_KEY = "fundledger.v2";
 const todayKey = () => new Date().toISOString().slice(0,10);
+
 function loadCache(){
   try {
     const raw = localStorage.getItem(CACHE_KEY);
@@ -406,6 +407,7 @@ const state = {
   oneMonthGainers: null, // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
   multiListed: null,   // [{t, price, w, m1, m3, m6, ytd, y1, count, inLists}] from data.json
   search: { query: "", loading: false, error: null, result: null },
+  baseFilter: "",       // local, client-side search text for the Base ETFs list (section 01)
   searchReturns: {}    // period -> { TICKER: pct } when source === 'search'
 };
 const activePeriod = () => state.timeframe || "1D";
@@ -578,20 +580,19 @@ function pctTd(v, decimals){
   return '<td class="'+cls+'">'+(v>=0?"+":"")+v.toFixed(decimals)+'%</td>';
 }
 
-function rowHTML({rank,t,n,price,day,ret,showRet,active,action}){
+function rowHTML({rank,t,n,price,day,ret,showRet}){
   const secondary = day!=null
     ? '<span class="price '+(day>=0?'pos':'neg')+'">'+(day>=0?'+':'')+day.toFixed(2)+'%</span>'
     : (price!=null ? '<span class="price">$'+price.toFixed(2)+'</span>' : '');
-  return '<button class="row'+(active?' active':'')+'" data-action="'+action+'" data-t="'+esc(t)+'">'
+  return '<div class="row">'
     + '<span class="row-left">'
     + (rank!=null ? '<span class="rank">'+rank+'</span>' : '')
-    + '<span class="marker"></span>'
     + '<span class="tick">'+esc(t)+'</span>'
     + '<span class="name">'+esc(n)+'</span>'
     + secondary
     + '</span>'
     + (showRet ? fmtRet(ret) : '')
-    + '</button>';
+    + '</div>';
 }
 
 function sectionHTML(key, index, title, count, bodyHTML){
@@ -612,6 +613,14 @@ function pillsHTML(items, selectedLabel, action){
 }
 
 function render(){
+  // Preserve the focused input's cursor position across re-renders, since
+  // $("#main").innerHTML gets fully replaced below (needed for live
+  // as-you-type filtering, e.g. the Base ETFs search box).
+  const activeEl = document.activeElement;
+  const activeId = activeEl && activeEl.id;
+  const selStart = activeEl && typeof activeEl.selectionStart === "number" ? activeEl.selectionStart : null;
+  const selEnd = activeEl && typeof activeEl.selectionEnd === "number" ? activeEl.selectionEnd : null;
+
   // Freshness banner
   const f = $("#freshness");
   if (state.loading && state.loadProgress){
@@ -653,16 +662,23 @@ function render(){
 
   const tfBody = pillsHTML(TIMEFRAMES, state.timeframe, "timeframe");
 
-  const ranked = ALL_TICKERS.map(r=>({...r,ret:returnFor(r.t)}))
+  const baseQuery = (state.baseFilter || "").trim().toLowerCase();
+  const rankedAll = ALL_TICKERS.map(r=>({...r,ret:returnFor(r.t)}))
     .sort((a,b)=>(b.ret??-1e9)-(a.ret??-1e9));
+  const ranked = baseQuery
+    ? rankedAll.filter(r => r.t.toLowerCase().includes(baseQuery) || r.n.toLowerCase().includes(baseQuery))
+    : rankedAll;
   const allBody =
     '<div class="group-label">' + freshnessLabel() + '</div>'
     + tfBody
+    + '<input id="baseFilterInput" type="text" placeholder="Search this list (e.g. Japan, XLK, Schwab)" value="' + esc(state.baseFilter || '') + '" '
+      + 'style="width:100%;font-family:var(--mono);font-size:13px;padding:8px 12px;margin:4px 0 8px;border:1.5px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);box-sizing:border-box;" />'
     + '<div class="note">Country, sector, and foundation ETFs ranked by '+(state.timeframe?period+' return':"today's % change (1D)")+'. Tap a period above to switch to a longer window.</div>'
-    + ranked.map((r,i)=>rowHTML({
-        rank:i+1,t:r.t,n:r.n,day:dayFor(r.t),ret:r.ret,showRet:true,
-        active:state.selected[r.origin].has(r.t),action:r.origin
-      })).join('');
+    + (ranked.length
+      ? ranked.map((r,i)=>rowHTML({
+          rank:i+1,t:r.t,n:r.n,day:dayFor(r.t),ret:r.ret,showRet:true
+        })).join('')
+      : '<div class="note warn">No matches for "'+esc(state.baseFilter)+'".</div>');
 
   const clubRows = state.club ?? CLUB_FALLBACK;
   const clubFresh = state.club
@@ -674,9 +690,10 @@ function render(){
     + (state.club ? ' End-of-day figures from a free full-market screen.' :
        ' Tap refresh to retry the live screen.')
     + '</div>'
-    + '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
+    + '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>SECTOR</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
     + clubRows.map(r =>
         '<tr><td>' + esc(r.t) + '</td>'
+        + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.sector || '\u2014') + '</td>'
         + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
         + '</tr>').join('')
     + '</tbody></table></div>';
@@ -687,9 +704,10 @@ function render(){
       ? '<div class="group-label">' + freshnessLabel() + '</div>'
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
     + '<div class="note">Stocks setting new 52-week highs (WSJ new-highs style). Every day a stock makes a new high adds a star, up to ★★★★★ \u2014 stars are cumulative and never reset, even after a missed day. Date shown is when the star was last added.</div>'
-    + '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>STARS</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
+    + '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>SECTOR</th><th>STARS</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
     + starRows.map(r =>
         '<tr><td>' + esc(r.t) + '</td>'
+        + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.sector || '\u2014') + '</td>'
         + '<td>' + "\u2605".repeat(Math.min(r.stars||1,5)) + (r.since?' \u00b7 '+fmtDate(r.since):'') + '</td>'
         + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
         + '</tr>').join('')
@@ -702,9 +720,10 @@ function render(){
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
     + '<div class="note">Stocks green in all six windows \u2014 5-day, 1-month, 3-month, 6-month, YTD, and 1-year \u2014 price \u2265 $1. Top 50 by 1-year return.</div>'
     + (greenRows.length
-      ? '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
+      ? '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>SECTOR</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
         + greenRows.map(r =>
             '<tr><td>' + esc(r.t) + '</td>'
+            + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.sector || '\u2014') + '</td>'
             + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
             + '</tr>').join('')
         + '</tbody></table></div>'
@@ -717,9 +736,10 @@ function render(){
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
     + '<div class="note">Stocks red in all six windows \u2014 5-day, 1-month, 3-month, 6-month, YTD, and 1-year \u2014 price \u2265 $1. Worst YTD first.</div>'
     + (redRows.length
-      ? '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
+      ? '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>SECTOR</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
         + redRows.map(r =>
             '<tr><td>' + esc(r.t) + '</td>'
+            + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.sector || '\u2014') + '</td>'
             + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
             + '</tr>').join('')
         + '</tbody></table></div>'
@@ -732,9 +752,10 @@ function render(){
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
     + '<div class="note">Top 50 stocks by 1-month gain, price \u2265 $1.</div>'
     + (month1Rows.length
-      ? '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
+      ? '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>SECTOR</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
         + month1Rows.map(r =>
             '<tr><td>' + esc(r.t) + '</td>'
+            + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.sector || '\u2014') + '</td>'
             + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
             + '</tr>').join('')
         + '</tbody></table></div>'
@@ -747,9 +768,10 @@ function render(){
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
     + '<div class="note">Stocks showing up in 2 or more of: The 100%+ Club, Star Gainers, All Green, and 1 Month Gainers. Independent bullish signals lining up on the same ticker \u2014 sorted by how many lists it\u2019s in, then 1-year return.</div>'
     + (multiRows.length
-      ? '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>IN</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
+      ? '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>SECTOR</th><th>IN</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
         + multiRows.map(r =>
             '<tr><td>' + esc(r.t) + '</td>'
+            + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.sector || '\u2014') + '</td>'
             + '<td>' + esc(r.inLists || '') + '</td>'
             + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
             + '</tr>').join('')
@@ -808,6 +830,16 @@ function render(){
     + sectionHTML("foundation","08","Foundation ETFs", 0, foundationBody)
     + sectionHTML("search","09","Search", 0, searchBody)
     + '<div class="spacer"></div>';
+
+  // Restore focus/cursor position on the input that was active before this
+  // re-render replaced the DOM (see note at the top of this function).
+  if (activeId){
+    const restored = document.getElementById(activeId);
+    if (restored && restored.focus){
+      restored.focus();
+      if (selStart != null && restored.setSelectionRange) restored.setSelectionRange(selStart, selEnd);
+    }
+  }
 }
 
 /* ================================================================ *
@@ -848,6 +880,10 @@ $("#refreshBtn").addEventListener("click", () => loadData(true));
 // keystroke) so it survives re-renders triggered by unrelated actions.
 document.addEventListener("input", e => {
   if (e.target && e.target.id === "searchInput") state.search.query = e.target.value;
+  if (e.target && e.target.id === "baseFilterInput"){
+    state.baseFilter = e.target.value;
+    render();
+  }
 });
 document.addEventListener("keydown", e => {
   if (e.key === "Enter" && e.target && e.target.id === "searchInput"){
