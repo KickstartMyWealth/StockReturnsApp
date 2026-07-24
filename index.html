@@ -217,7 +217,6 @@ const PROXIES = [
 const STOOQ_HISTORY = t => "https://stooq.com/q/d/l/?s=" + t.toLowerCase() + ".us&i=d";
 const CACHE_KEY = "fundledger.v2";
 const todayKey = () => new Date().toISOString().slice(0,10);
-
 function loadCache(){
   try {
     const raw = localStorage.getItem(CACHE_KEY);
@@ -474,35 +473,55 @@ async function fetchScreenerMap(){
   return merged;
 }
 
-async function resolveTicker(query){
-  const q = query.trim();
-  if (!q) throw new Error("empty");
-  const guess = q.toUpperCase().replace(/[^A-Z.]/g, "");
+// A few well-known colloquial names don't literally appear in the
+// official listed name (e.g. "Google" trades as "Alphabet Inc.", so a
+// literal text search for "google" misses it entirely and instead
+// surfaces unrelated funds that merely mention the word "Google").
+const SEARCH_ALIASES = { google: "alphabet", facebook: "meta platforms", fb: "meta platforms" };
+
+async function resolveTickers(query){
+  const qRaw = query.trim();
+  if (!qRaw) throw new Error("empty");
+  const guess = qRaw.toUpperCase().replace(/[^A-Z.]/g, "");
   // If the input already looks like a bare ticker, try it directly first.
   // The screener's own "name" field is the company name for this case.
   if (guess && guess.length <= 5 && /^[A-Z.]+$/.test(guess)){
     const map = await fetchScreenerMap();
-    if (map[guess]) return { t: guess, n: map[guess].name || guess, v: map[guess] };
+    if (map[guess]) return [{ t: guess, n: map[guess].name || guess, v: map[guess] }];
   }
   // Otherwise resolve a company name via the search API (also fetched
   // directly for the same reason as fetchScreenerMap above).
+  const q = SEARCH_ALIASES[qRaw.toLowerCase()] || qRaw;
   const searchRes = await fetch(SEARCH_QUERY_URL(q), { signal: AbortSignal.timeout(15000) });
   if (!searchRes.ok) throw new Error("HTTP " + searchRes.status);
   const searchText = await searchRes.text();
   const sj = JSON.parse(searchText);
   const candidates = Array.isArray(sj) ? sj : (sj.data || sj.results || sj.stocks || sj.symbols || []);
-  // Prefer a primary US listing (type "s" = stock, "e" = ETF) over foreign
-  // cross-listings (type "sy"), which use prefixed symbols like "bcba/NOWD".
-  const first = candidates.find(c => c && c.s && (c.t === "s" || c.t === "e"))
-    || candidates.find(c => c && (c.symbol || c.s || c.ticker));
-  if (!first) throw new Error("not found");
-  const sym = String(first.symbol || first.s || first.ticker).toUpperCase();
+  // Keep only primary US listings (type "s" stock or "e" ETF, plain symbol
+  // with no dots/slashes) — this drops foreign cross-listings like
+  // "bcba/NOWD" and dotted variants like "GOOG.M".
+  const primary = candidates.filter(c => c && c.s && (c.t === "s" || c.t === "e") && /^[A-Z]+$/.test(c.s));
+  if (!primary.length) throw new Error("not found");
+  const anchor = primary[0];
+  // For a stock match, also pull any other share class listed under the
+  // exact same company name (e.g. GOOGL + GOOG both list as "Alphabet
+  // Inc.") — but not unrelated ETFs that merely mention the company.
+  const matches = anchor.t === "s"
+    ? primary.filter(c => c.t === "s" && c.n === anchor.n)
+    : [anchor];
   const map = await fetchScreenerMap();
-  if (!map[sym]) throw new Error("no data");
-  // Prefer the screener's own name (kept consistent with the ticker-lookup
-  // path above); fall back to whatever the search API returned.
-  const name = map[sym].name || first.name || first.n || first.companyName || sym;
-  return { t: sym, n: name, v: map[sym] };
+  const results = [];
+  const seen = new Set();
+  for (const c of matches){
+    const sym = c.s.toUpperCase();
+    if (seen.has(sym) || !map[sym]) continue;
+    seen.add(sym);
+    const name = map[sym].name || c.name || c.n || sym;
+    results.push({ t: sym, n: name, v: map[sym] });
+    if (results.length >= 5) break; // sane cap
+  }
+  if (!results.length) throw new Error("no data");
+  return results;
 }
 
 async function performSearch(){
@@ -513,14 +532,14 @@ async function performSearch(){
   state.search.loading = true; state.search.error = null; state.search.result = null;
   render();
   try {
-    const { t, n, v } = await resolveTicker(q);
+    const list = await resolveTickers(q);
     const num = x => { const nn = Number(x); return Number.isFinite(nn) ? nn : null; };
-    state.search.result = {
+    state.search.result = list.map(({ t, n, v }) => ({
       t, n,
       day: num(v.change), w: num(v.ch1w), m1: num(v.ch1m), m3: num(v.ch3m),
       m6: num(v.ch6m), ytd: num(v.chYTD), y1: num(v.ch1y),
       inLists: findListings(t)
-    };
+    }));
   } catch (e) {
     state.search.error = "Couldn't find that ticker or company. Try the exact ticker symbol.";
   }
@@ -758,7 +777,7 @@ function render(){
   const sr = state.search.result;
   const searchBody =
     '<div class="group-label">LIVE SEARCH</div>'
-    + '<div class="note">Search any US-listed stock or ETF by ticker or company name.</div>'
+    + '<div class="note">Search any US-listed stock or ETF by ticker or company name. Companies with multiple share classes (e.g. Alphabet\u2019s GOOGL/GOOG) return every class.</div>'
     + '<div class="pills" style="align-items:center;flex-wrap:nowrap;">'
     + '<input id="searchInput" type="text" placeholder="e.g. ServiceNow or NOW" value="' + esc(state.search.query || '') + '" '
       + 'style="flex:1;min-width:0;font-family:var(--mono);font-size:13px;padding:8px 12px;border:1.5px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);" />'
@@ -766,15 +785,16 @@ function render(){
     + '</div>'
     + (state.search.loading ? '<div class="note">Searching…</div>' : '')
     + (state.search.error ? '<div class="note warn">' + esc(state.search.error) + '</div>' : '')
-    + (sr
-      ? '<div class="group-label">' + (sr.inLists.length
-            ? 'TICKERS LISTED ABOVE \u00b7 ' + esc(sr.inLists.join(', ').toUpperCase())
-            : 'NOT CURRENTLY IN ANY FILTER ABOVE') + '</div>'
-        + '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>NAME</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
-        + '<tr><td>' + esc(sr.t) + '</td>'
-        + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(sr.n) + '</td>'
-        + [sr.day, sr.w, sr.m1, sr.m3, sr.m6, sr.ytd, sr.y1].map(v => pctTd(v, 1)).join('')
-        + '</tr></tbody></table></div>'
+    + (sr && sr.length
+      ? '<div class="group-label">' + sr.length + (sr.length === 1 ? ' MATCH' : ' MATCHES') + '</div>'
+        + '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>NAME</th><th>IN</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
+        + sr.map(r =>
+            '<tr><td>' + esc(r.t) + '</td>'
+            + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.n) + '</td>'
+            + '<td style="text-align:left;color:var(--ink-faint);font-size:9.5px;">' + esc(r.inLists.join(', ') || '\u2014') + '</td>'
+            + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
+            + '</tr>').join('')
+        + '</tbody></table></div>'
       : '');
 
   $("#main").innerHTML =
