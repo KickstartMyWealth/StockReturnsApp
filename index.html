@@ -534,6 +534,12 @@ function fmtDate(d){
   if (!m) return null;
   return m[2] + "/" + m[3] + "/" + m[1].slice(2);
 }
+// Uniform freshness label for every batch-refreshed section: "TODAY AS OF DD/MM/YY"
+function freshnessLabel(){
+  const m = String(state.dataAsOf || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return "TODAY AS OF \u2014";
+  return "TODAY AS OF " + m[3] + "/" + m[2] + "/" + m[1].slice(2);
+}
 
 /* ================================================================ *
  *  RENDER
@@ -631,7 +637,8 @@ function render(){
   const ranked = ALL_TICKERS.map(r=>({...r,ret:returnFor(r.t)}))
     .sort((a,b)=>(b.ret??-1e9)-(a.ret??-1e9));
   const allBody =
-    tfBody
+    '<div class="group-label">' + freshnessLabel() + '</div>'
+    + tfBody
     + '<div class="note">Country, sector, and foundation ETFs ranked by '+(state.timeframe?period+' return':"today's % change (1D)")+'. Tap a period above to switch to a longer window.</div>'
     + ranked.map((r,i)=>rowHTML({
         rank:i+1,t:r.t,n:r.n,day:dayFor(r.t),ret:r.ret,showRet:true,
@@ -640,13 +647,7 @@ function render(){
 
   const clubRows = state.club ?? CLUB_FALLBACK;
   const clubFresh = state.club
-    ? '<div class="group-label">'
-      + (state.clubSource === "screen"
-          ? 'FULL-MARKET SCREEN · ALL US-LISTED STOCKS · ' + esc(fmtDate(state.dataAsOf) || "latest close")
-            + (state.source === "static" ? ' · AUTO-REFRESHED AT CLOSE' : '')
-          : 'VIA WEB SEARCH · ALL US-TRADABLE STOCKS · LATEST CLOSE')
-      + (state.clubFetchedAt ? ' · FETCHED ' + esc(state.clubFetchedAt.toLocaleString([], {dateStyle:"short", timeStyle:"short"})) : '')
-      + '</div>'
+    ? '<div class="group-label">' + freshnessLabel() + '</div>'
     : '<div class="group-label" style="color:var(--rust)">SNAPSHOT · S&amp;P 500 · MID-JULY 2026 · LIVE SOURCES UNREACHABLE</div>';
   const clubBody =
     clubFresh
@@ -664,7 +665,7 @@ function render(){
   const starRows = state.starGainers || [];
   const starsBody =
     (starRows.length
-      ? '<div class="group-label">NEW 1-YEAR HIGHS · DAILY STREAKS · ' + esc(fmtDate(state.dataAsOf) || "latest close") + '</div>'
+      ? '<div class="group-label">' + freshnessLabel() + '</div>'
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
     + '<div class="note">Stocks setting new 52-week highs (WSJ new-highs style). Every day a stock makes a new high adds a star, up to ★★★★★ \u2014 stars are cumulative and never reset, even after a missed day. Date shown is when the star was last added.</div>'
     + '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>STARS</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
@@ -678,7 +679,7 @@ function render(){
   const greenRows = state.allGreen || [];
   const greenBody =
     (greenRows.length
-      ? '<div class="group-label">POSITIVE ACROSS EVERY WINDOW \u00b7 ' + esc(fmtDate(state.dataAsOf) || "latest close") + '</div>'
+      ? '<div class="group-label">' + freshnessLabel() + '</div>'
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
     + '<div class="note">Stocks green in all six windows \u2014 5-day, 1-month, 3-month, 6-month, YTD, and 1-year \u2014 price \u2265 $1. Top 50 by 1-year return.</div>'
     + (greenRows.length
@@ -693,7 +694,7 @@ function render(){
   const redRows = state.allRed || [];
   const redBody =
     (redRows.length
-      ? '<div class="group-label">NEGATIVE ACROSS EVERY WINDOW \u00b7 ' + esc(fmtDate(state.dataAsOf) || "latest close") + '</div>'
+      ? '<div class="group-label">' + freshnessLabel() + '</div>'
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
     + '<div class="note">Stocks red in all six windows \u2014 5-day, 1-month, 3-month, 6-month, YTD, and 1-year \u2014 price \u2265 $1. Worst YTD first.</div>'
     + (redRows.length
@@ -708,7 +709,7 @@ function render(){
   const month1Rows = state.oneMonthGainers || [];
   const month1Body =
     (month1Rows.length
-      ? '<div class="group-label">1-MONTH RETURN &gt; 10% \u00b7 ' + esc(fmtDate(state.dataAsOf) || "latest close") + '</div>'
+      ? '<div class="group-label">' + freshnessLabel() + '</div>'
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
     + '<div class="note">Top 50 stocks by 1-month gain, price \u2265 $1.</div>'
     + (month1Rows.length
@@ -723,7 +724,7 @@ function render(){
   const multiRows = state.multiListed || [];
   const multiBody =
     (multiRows.length
-      ? '<div class="group-label">APPEARS IN 2+ BULLISH LISTS \u00b7 ' + esc(fmtDate(state.dataAsOf) || "latest close") + '</div>'
+      ? '<div class="group-label">' + freshnessLabel() + '</div>'
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
     + '<div class="note">Stocks showing up in 2 or more of: The 100%+ Club, Star Gainers, All Green, and 1 Month Gainers. Independent bullish signals lining up on the same ticker \u2014 sorted by how many lists it\u2019s in, then 1-year return.</div>'
     + (multiRows.length
@@ -739,6 +740,7 @@ function render(){
   const activeFamily = state.family || "Schwab";
   const foundationBody =
     pillsHTML(FAMILIES, activeFamily, "family")
+    + '<div class="group-label">' + freshnessLabel() + '</div>'
     + '<div class="note">Returns for each core ' + esc(activeFamily) + ' fund, by asset class.</div>'
     + FOUNDATION_GROUPS.map(g => {
         const rows = familyList(activeFamily).filter(r => r.group === g);
@@ -755,7 +757,8 @@ function render(){
 
   const sr = state.search.result;
   const searchBody =
-    '<div class="note">Search any US-listed stock or ETF by ticker or company name.</div>'
+    '<div class="group-label">LIVE SEARCH</div>'
+    + '<div class="note">Search any US-listed stock or ETF by ticker or company name.</div>'
     + '<div class="pills" style="align-items:center;flex-wrap:nowrap;">'
     + '<input id="searchInput" type="text" placeholder="e.g. ServiceNow or NOW" value="' + esc(state.search.query || '') + '" '
       + 'style="flex:1;min-width:0;font-family:var(--mono);font-size:13px;padding:8px 12px;border:1.5px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);" />'
