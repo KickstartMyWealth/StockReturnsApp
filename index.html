@@ -534,11 +534,11 @@ function fmtDate(d){
   if (!m) return null;
   return m[2] + "/" + m[3] + "/" + m[1].slice(2);
 }
-// Uniform freshness label for every batch-refreshed section: "TODAY AS OF DD/MM/YY"
+// Uniform freshness label for every batch-refreshed section: "UPDATED EVERY 30 MIN AS OF DD/MM/YY"
 function freshnessLabel(){
   const m = String(state.dataAsOf || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (!m) return "TODAY AS OF \u2014";
-  return "TODAY AS OF " + m[3] + "/" + m[2] + "/" + m[1].slice(2);
+  if (!m) return "UPDATED EVERY 30 MIN AS OF \u2014";
+  return "UPDATED EVERY 30 MIN AS OF " + m[3] + "/" + m[2] + "/" + m[1].slice(2);
 }
 
 /* ================================================================ *
