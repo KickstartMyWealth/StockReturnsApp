@@ -65,8 +65,8 @@
   .section-body[hidden] { display:none; }
 
   .group-label { font-family:var(--mono); font-size:10px; color:var(--teal); letter-spacing:1.5px; padding:10px 0 2px; }
-  .note { font-size:11px; color:var(--ink-faint); padding-bottom:8px; }
 
+  .note { font-size:11px; color:var(--ink-faint); padding-bottom:8px; }
   .note.warn { color:var(--rust); }
 
   .row { width:100%; display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--line); text-align:left; }
@@ -131,6 +131,8 @@
  * ================================================================ */
 const TIMEFRAMES = ["1M","2M","3M","YTD","1Y"];
 const DEFAULT_PERIOD = "1M";
+const ORIGIN_FILTERS = ["Country","Sector","ETFs"];
+const ORIGIN_KEY = { Country: "country", Sector: "sector", ETFs: "foundation" };
 
 const COUNTRY_ETFS = [
   {t:"EWJ",n:"Japan",grp:"Developed"},{t:"EWA",n:"Australia",grp:"Developed"},
@@ -407,7 +409,7 @@ const state = {
   oneMonthGainers: null, // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
   multiListed: null,   // [{t, price, w, m1, m3, m6, ytd, y1, count, inLists}] from data.json
   search: { query: "", loading: false, error: null, result: null },
-  baseFilter: "",       // local, client-side search text for the Base ETFs list (section 01)
+  originFilter: null,   // "Country" | "Sector" | "ETFs" | null (section 01 origin filter)
   searchReturns: {}    // period -> { TICKER: pct } when source === 'search'
 };
 const activePeriod = () => state.timeframe || "1D";
@@ -613,14 +615,6 @@ function pillsHTML(items, selectedLabel, action){
 }
 
 function render(){
-  // Preserve the focused input's cursor position across re-renders, since
-  // $("#main").innerHTML gets fully replaced below (needed for live
-  // as-you-type filtering, e.g. the Base ETFs search box).
-  const activeEl = document.activeElement;
-  const activeId = activeEl && activeEl.id;
-  const selStart = activeEl && typeof activeEl.selectionStart === "number" ? activeEl.selectionStart : null;
-  const selEnd = activeEl && typeof activeEl.selectionEnd === "number" ? activeEl.selectionEnd : null;
-
   // Freshness banner
   const f = $("#freshness");
   if (state.loading && state.loadProgress){
@@ -662,23 +656,19 @@ function render(){
 
   const tfBody = pillsHTML(TIMEFRAMES, state.timeframe, "timeframe");
 
-  const baseQuery = (state.baseFilter || "").trim().toLowerCase();
-  const rankedAll = ALL_TICKERS.map(r=>({...r,ret:returnFor(r.t)}))
+  const originBody = pillsHTML(ORIGIN_FILTERS, state.originFilter, "originFilter");
+  const originKey = state.originFilter ? ORIGIN_KEY[state.originFilter] : null;
+  const ranked = (originKey ? ALL_TICKERS.filter(r => r.origin === originKey) : ALL_TICKERS)
+    .map(r=>({...r,ret:returnFor(r.t)}))
     .sort((a,b)=>(b.ret??-1e9)-(a.ret??-1e9));
-  const ranked = baseQuery
-    ? rankedAll.filter(r => r.t.toLowerCase().includes(baseQuery) || r.n.toLowerCase().includes(baseQuery))
-    : rankedAll;
   const allBody =
     '<div class="group-label">' + freshnessLabel() + '</div>'
     + tfBody
-    + '<input id="baseFilterInput" type="text" placeholder="Search this list (e.g. Japan, XLK, Schwab)" value="' + esc(state.baseFilter || '') + '" '
-      + 'style="width:100%;font-family:var(--mono);font-size:13px;padding:8px 12px;margin:4px 0 8px;border:1.5px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);box-sizing:border-box;" />'
-    + '<div class="note">Country, sector, and foundation ETFs ranked by '+(state.timeframe?period+' return':"today's % change (1D)")+'. Tap a period above to switch to a longer window.</div>'
-    + (ranked.length
-      ? ranked.map((r,i)=>rowHTML({
-          rank:i+1,t:r.t,n:r.n,day:dayFor(r.t),ret:r.ret,showRet:true
-        })).join('')
-      : '<div class="note warn">No matches for "'+esc(state.baseFilter)+'".</div>');
+    + originBody
+    + '<div class="note">Country, sector, and foundation ETFs ranked by '+(state.timeframe?period+' return':"today's % change (1D)")+'. Tap a period above to switch to a longer window, or a filter below to narrow by type.</div>'
+    + ranked.map((r,i)=>rowHTML({
+        rank:i+1,t:r.t,n:r.n,day:dayFor(r.t),ret:r.ret,showRet:true
+      })).join('');
 
   const clubRows = state.club ?? CLUB_FALLBACK;
   const clubFresh = state.club
@@ -830,16 +820,6 @@ function render(){
     + sectionHTML("foundation","08","Foundation ETFs", 0, foundationBody)
     + sectionHTML("search","09","Search", 0, searchBody)
     + '<div class="spacer"></div>';
-
-  // Restore focus/cursor position on the input that was active before this
-  // re-render replaced the DOM (see note at the top of this function).
-  if (activeId){
-    const restored = document.getElementById(activeId);
-    if (restored && restored.focus){
-      restored.focus();
-      if (selStart != null && restored.setSelectionRange) restored.setSelectionRange(selStart, selEnd);
-    }
-  }
 }
 
 /* ================================================================ *
@@ -860,6 +840,8 @@ document.addEventListener("click", e => {
   } else if (a === "timeframe"){
     state.timeframe = state.timeframe === el.dataset.v ? null : el.dataset.v;
     ensurePeriod();
+  } else if (a === "originFilter"){
+    state.originFilter = state.originFilter === el.dataset.v ? null : el.dataset.v;
   } else if (a === "family"){
     state.family = state.family === el.dataset.v ? null : el.dataset.v;
     state.selected.foundation = new Set();
@@ -880,10 +862,6 @@ $("#refreshBtn").addEventListener("click", () => loadData(true));
 // keystroke) so it survives re-renders triggered by unrelated actions.
 document.addEventListener("input", e => {
   if (e.target && e.target.id === "searchInput") state.search.query = e.target.value;
-  if (e.target && e.target.id === "baseFilterInput"){
-    state.baseFilter = e.target.value;
-    render();
-  }
 });
 document.addEventListener("keydown", e => {
   if (e.key === "Enter" && e.target && e.target.id === "searchInput"){
