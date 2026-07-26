@@ -710,7 +710,7 @@ function render(){
       + '</tr></thead><tbody>'
     + sortRows(baseRows, state.sort.all.key, state.sort.all.dir).map(r =>
         '<tr><td>' + esc(r.t) + '</td>'
-        + '<td style="text-align:left;color:var(--ink-faint);font-size:8.5px;">' + esc(r.n) + '</td>'
+        + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.n) + '</td>'
         + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
         + '</tr>').join('')
     + '</tbody></table></div>';
