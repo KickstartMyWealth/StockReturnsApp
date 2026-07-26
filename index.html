@@ -118,7 +118,6 @@
   </div>
   <div id="freshness" class="freshness">Loading…</div>
   <div id="chips" class="chips"><span class="chips-empty">No filters selected yet</span></div>
-
 </header>
 
 <main id="main"></main>
@@ -127,6 +126,7 @@
 <script>
 "use strict";
 /* ================================================================ *
+
  *  STATIC DATA
  * ================================================================ */
 const TIMEFRAMES = ["1M","2M","3M","YTD","1Y"];
@@ -302,7 +302,7 @@ async function askClaudeJSON(prompt){
   return JSON.parse(m ? m[0] : text);
 }
 
-const PERIOD_WORDS = {"1M":"1-month","2M":"2-month","3M":"3-month","YTD":"year-to-date","1Y":"1-year"};
+const PERIOD_WORDS = {"1D":"1-day","1M":"1-month","2M":"2-month","3M":"3-month","YTD":"year-to-date","1Y":"1-year"};
 
 async function claudeFetchReturns(period){
   const parsed = await askClaudeJSON(
@@ -411,6 +411,7 @@ const state = {
   search: { query: "", loading: false, error: null, result: null },
   originFilter: null,   // "Country" | "Sector" | "ETFs" | null (section 01 origin filter)
   sort: {                // per-table client-side sort: { key, dir } — click a column header to change
+    all: { key: "m1", dir: "desc" },
     club: { key: "ytd", dir: "desc" },
     stars: { key: "stars", dir: "desc" },
     green: { key: "y1", dir: "desc" },
@@ -690,23 +691,29 @@ function render(){
     : '<span class="chips-empty">No filters selected yet</span>';
 
   /* --- sections --- */
-  const period = activePeriod();
-
-  const tfBody = pillsHTML(TIMEFRAMES, state.timeframe, "timeframe");
-
   const originBody = pillsHTML(ORIGIN_FILTERS, state.originFilter, "originFilter");
   const originKey = state.originFilter ? ORIGIN_KEY[state.originFilter] : null;
-  const ranked = (originKey ? ALL_TICKERS.filter(r => r.origin === originKey) : ALL_TICKERS)
-    .map(r=>({...r,ret:returnFor(r.t)}))
-    .sort((a,b)=>(b.ret??-1e9)-(a.ret??-1e9));
+  const baseRows = (originKey ? ALL_TICKERS.filter(r => r.origin === originKey) : ALL_TICKERS)
+    .map(r => ({
+      t: r.t, n: r.n,
+      day: retField(r.t, "1D"), w: retField(r.t, "5D"), m1: retField(r.t, "1M"),
+      m3: retField(r.t, "3M"), m6: retField(r.t, "6M"), ytd: retField(r.t, "YTD"), y1: retField(r.t, "1Y")
+    }));
   const allBody =
     '<div class="group-label">' + freshnessLabel() + '</div>'
-    + tfBody
     + originBody
-    + '<div class="note">Country, sector, and foundation ETFs ranked by '+(state.timeframe?period+' return':"today's % change (1D)")+'. Tap a period above to switch to a longer window, or a filter below to narrow by type.</div>'
-    + ranked.map((r,i)=>rowHTML({
-        rank:i+1,t:r.t,n:r.n,day:dayFor(r.t),ret:r.ret,showRet:true
-      })).join('');
+    + '<div class="note">Country, sector, and foundation ETFs. Default sort is by 1M return \u2014 tap any column to sort by it instead, or a filter above to narrow by type.</div>'
+    + '<div class="gwrap"><table class="gtable"><thead><tr>'
+      + sortableTh("all","t","TICKER") + sortableTh("all","n","NAME")
+      + sortableTh("all","day","TODAY") + sortableTh("all","w","5D") + sortableTh("all","m1","1M")
+      + sortableTh("all","m3","3M") + sortableTh("all","m6","6M") + sortableTh("all","ytd","YTD") + sortableTh("all","y1","1Y")
+      + '</tr></thead><tbody>'
+    + sortRows(baseRows, state.sort.all.key, state.sort.all.dir).map(r =>
+        '<tr><td>' + esc(r.t) + '</td>'
+        + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.n) + '</td>'
+        + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
+        + '</tr>').join('')
+    + '</tbody></table></div>';
 
   const clubRows = state.club ?? CLUB_FALLBACK;
   const clubFresh = state.club
