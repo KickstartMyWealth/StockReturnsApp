@@ -143,6 +143,7 @@ const COUNTRY_ETFS = [
   {t:"EWU",n:"United Kingdom",grp:"Developed"},{t:"EIS",n:"Israel",grp:"Developed"},
   {t:"EWS",n:"Singapore",grp:"Developed"},{t:"EWH",n:"Hong Kong",grp:"Developed"},
   {t:"EDEN",n:"Denmark",grp:"Developed"},{t:"EFNL",n:"Finland",grp:"Developed"},
+
   {t:"EIRL",n:"Ireland",grp:"Developed"},{t:"ENOR",n:"Norway",grp:"Developed"},
   {t:"ENZL",n:"New Zealand",grp:"Developed"},{t:"EWY",n:"South Korea",grp:"Developed"},
   {t:"EWZ",n:"Brazil",grp:"Emerging"},{t:"EWW",n:"Mexico",grp:"Emerging"},
@@ -637,7 +638,10 @@ function sortableTh(section, key, label){
   const s = state.sort[section];
   const active = s && s.key === key;
   const arrow = active ? (s.dir === "asc" ? " \u25b2" : " \u25bc") : "";
-  return '<th data-action="sortCol" data-section="'+section+'" data-key="'+key+'" style="cursor:pointer;user-select:none;">'+label+arrow+'</th>';
+  // Uses "data-tbl" (not "data-section") to avoid colliding with the
+  // section-head expand/collapse buttons, which use "data-section" and
+  // are checked first in the click handler below.
+  return '<th data-action="sortCol" data-tbl="'+section+'" data-key="'+key+'" style="cursor:pointer;user-select:none;">'+label+arrow+'</th>';
 }
 
 function render(){
@@ -889,7 +893,7 @@ document.addEventListener("click", e => {
   } else if (a === "originFilter"){
     state.originFilter = state.originFilter === el.dataset.v ? null : el.dataset.v;
   } else if (a === "sortCol"){
-    const section = el.dataset.section, key = el.dataset.key;
+    const section = el.dataset.tbl, key = el.dataset.key;
     const cur = state.sort[section];
     if (cur && cur.key === key) cur.dir = cur.dir === "asc" ? "desc" : "asc";
     else state.sort[section] = { key, dir: "desc" };
