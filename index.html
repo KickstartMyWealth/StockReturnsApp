@@ -175,12 +175,12 @@ const FOUNDATION_MASTER = [
   {group:"Domestic Equity",n:"U.S. Mid-Cap",schwab:"SCHM",vanguard:"VO",ishares:"IJH"},
   {group:"Domestic Equity",n:"U.S. Small-Cap",schwab:"SCHA",vanguard:"VB",ishares:"IJR"},
   {group:"Domestic Equity",n:"U.S. REIT",schwab:"SCHH",vanguard:"VNQ",ishares:"IYR"},
-  {group:"International Equity",n:"International Equity",schwab:"SCHF",vanguard:"VEA",ishares:"EFA"},
-  {group:"International Equity",n:"International Small-Cap Equity",schwab:"SCHC",vanguard:"VSS",ishares:"SCZ"},
+  {group:"International Equity",n:"Intl Equity",schwab:"SCHF",vanguard:"VEA",ishares:"EFA"},
+  {group:"International Equity",n:"Intl Small-Cap Equity",schwab:"SCHC",vanguard:"VSS",ishares:"SCZ"},
   {group:"International Equity",n:"Emerging Markets Equity",schwab:"SCHE",vanguard:"VWO",ishares:"EEM"},
   {group:"Bond",n:"US TIPS",schwab:"SCHP",vanguard:null,ishares:"TIP"},
   {group:"Bond",n:"Short-Term U.S. Treasury",schwab:"SCHO",vanguard:null,ishares:"SHY"},
-  {group:"Bond",n:"Intermediate-Term U.S. Treasury",schwab:"SCHR",vanguard:null,ishares:"IEI"}
+  {group:"Bond",n:"Int.-Term U.S. Treasury",schwab:"SCHR",vanguard:null,ishares:"IEI"}
 ];
 const FOUNDATION_GROUPS = ["Domestic Equity","International Equity","Bond"];
 const familyList = f => FOUNDATION_MASTER.filter(r=>r[FAMILY_KEY[f]]).map(r=>({t:r[FAMILY_KEY[f]],n:r.n,group:r.group}));
@@ -710,7 +710,7 @@ function render(){
       + '</tr></thead><tbody>'
     + sortRows(baseRows, state.sort.all.key, state.sort.all.dir).map(r =>
         '<tr><td>' + esc(r.t) + '</td>'
-        + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.n) + '</td>'
+        + '<td title="' + esc(r.n) + '" style="text-align:left;color:var(--ink-faint);font-size:10.5px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(r.n) + '</td>'
         + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
         + '</tr>').join('')
     + '</tbody></table></div>';
