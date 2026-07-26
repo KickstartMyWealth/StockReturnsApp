@@ -674,13 +674,16 @@ function render(){
   $("#refreshBtn").classList.toggle("loading", state.loading);
 
   // Chips
+  // Note: the timeframe (1M/2M/etc.) selection intentionally does NOT
+  // appear here. It only applies within the "Base ETFs" section (01),
+  // and showing it in this global header — visible even while that
+  // section is collapsed — falsely implied it applied to every section.
   const chips = [
     ...[...state.selected.country].map(t=>({t,g:"country"})),
     ...[...state.selected.sector].map(t=>({t,g:"sector"})),
     ...[...state.selected.foundation].map(t=>({t,g:"foundation"})),
     ...[...state.selected.club100].map(t=>({t,g:"club100"})),
-    ...[...state.selected.stars].map(t=>({t,g:"stars"})),
-    ...(state.timeframe ? [{t:state.timeframe,g:"timeframe"}] : [])
+    ...[...state.selected.stars].map(t=>({t,g:"stars"}))
   ];
   $("#chips").innerHTML = chips.length
     ? chips.map(c=>'<button class="chip" data-action="chip" data-g="'+c.g+'" data-t="'+esc(c.t)+'">'+esc(c.t)+' ✕</button>').join('')
