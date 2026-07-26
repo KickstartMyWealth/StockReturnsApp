@@ -65,7 +65,6 @@
   .section-body[hidden] { display:none; }
 
   .group-label { font-family:var(--mono); font-size:10px; color:var(--teal); letter-spacing:1.5px; padding:10px 0 2px; }
-
   .note { font-size:11px; color:var(--ink-faint); padding-bottom:8px; }
   .note.warn { color:var(--rust); }
 
@@ -410,6 +409,14 @@ const state = {
   multiListed: null,   // [{t, price, w, m1, m3, m6, ytd, y1, count, inLists}] from data.json
   search: { query: "", loading: false, error: null, result: null },
   originFilter: null,   // "Country" | "Sector" | "ETFs" | null (section 01 origin filter)
+  sort: {                // per-table client-side sort: { key, dir } — click a column header to change
+    club: { key: "ytd", dir: "desc" },
+    stars: { key: "stars", dir: "desc" },
+    green: { key: "y1", dir: "desc" },
+    red: { key: "ytd", dir: "asc" },
+    month1: { key: "m1", dir: "desc" },
+    multi: { key: "count", dir: "desc" },
+  },
   searchReturns: {}    // period -> { TICKER: pct } when source === 'search'
 };
 const activePeriod = () => state.timeframe || "1D";
@@ -614,6 +621,25 @@ function pillsHTML(items, selectedLabel, action){
   ).join('') + '</div>';
 }
 
+// Sort a table's rows by any field, nulls always last, numbers or strings.
+function sortRows(rows, key, dir){
+  return [...rows].sort((a,b) => {
+    const av = a[key], bv = b[key];
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    if (typeof av === "string") return dir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+    return dir === "asc" ? av - bv : bv - av;
+  });
+}
+// Clickable <th> for a sortable column; shows ▲/▼ on whichever column is active.
+function sortableTh(section, key, label){
+  const s = state.sort[section];
+  const active = s && s.key === key;
+  const arrow = active ? (s.dir === "asc" ? " \u25b2" : " \u25bc") : "";
+  return '<th data-action="sortCol" data-section="'+section+'" data-key="'+key+'" style="cursor:pointer;user-select:none;">'+label+arrow+'</th>';
+}
+
 function render(){
   // Freshness banner
   const f = $("#freshness");
@@ -680,8 +706,11 @@ function render(){
     + (state.club ? ' End-of-day figures from a free full-market screen.' :
        ' Tap refresh to retry the live screen.')
     + '</div>'
-    + '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>SECTOR</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
-    + clubRows.map(r =>
+    + '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>SECTOR</th>'
+      + sortableTh("club","day","TODAY") + sortableTh("club","w","5D") + sortableTh("club","m1","1M")
+      + sortableTh("club","m3","3M") + sortableTh("club","m6","6M") + sortableTh("club","ytd","YTD") + sortableTh("club","y1","1Y")
+      + '</tr></thead><tbody>'
+    + sortRows(clubRows, state.sort.club.key, state.sort.club.dir).map(r =>
         '<tr><td>' + esc(r.t) + '</td>'
         + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.sector || '\u2014') + '</td>'
         + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
@@ -694,8 +723,12 @@ function render(){
       ? '<div class="group-label">' + freshnessLabel() + '</div>'
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
     + '<div class="note">Stocks setting new 52-week highs (WSJ new-highs style). Every day a stock makes a new high adds a star, up to ★★★★★ \u2014 stars are cumulative and never reset, even after a missed day. Date shown is when the star was last added.</div>'
-    + '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>SECTOR</th><th>STARS</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
-    + starRows.map(r =>
+    + '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>SECTOR</th>'
+      + sortableTh("stars","stars","STARS") + sortableTh("stars","day","TODAY") + sortableTh("stars","w","5D")
+      + sortableTh("stars","m1","1M") + sortableTh("stars","m3","3M") + sortableTh("stars","m6","6M")
+      + sortableTh("stars","ytd","YTD") + sortableTh("stars","y1","1Y")
+      + '</tr></thead><tbody>'
+    + sortRows(starRows, state.sort.stars.key, state.sort.stars.dir).map(r =>
         '<tr><td>' + esc(r.t) + '</td>'
         + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.sector || '\u2014') + '</td>'
         + '<td>' + "\u2605".repeat(Math.min(r.stars||1,5)) + (r.since?' \u00b7 '+fmtDate(r.since):'') + '</td>'
@@ -710,8 +743,11 @@ function render(){
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
     + '<div class="note">Stocks green in all six windows \u2014 5-day, 1-month, 3-month, 6-month, YTD, and 1-year \u2014 price \u2265 $1. Top 50 by 1-year return.</div>'
     + (greenRows.length
-      ? '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>SECTOR</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
-        + greenRows.map(r =>
+      ? '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>SECTOR</th>'
+        + sortableTh("green","day","TODAY") + sortableTh("green","w","5D") + sortableTh("green","m1","1M")
+        + sortableTh("green","m3","3M") + sortableTh("green","m6","6M") + sortableTh("green","ytd","YTD") + sortableTh("green","y1","1Y")
+        + '</tr></thead><tbody>'
+        + sortRows(greenRows, state.sort.green.key, state.sort.green.dir).map(r =>
             '<tr><td>' + esc(r.t) + '</td>'
             + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.sector || '\u2014') + '</td>'
             + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
@@ -726,8 +762,11 @@ function render(){
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
     + '<div class="note">Stocks red in all six windows \u2014 5-day, 1-month, 3-month, 6-month, YTD, and 1-year \u2014 price \u2265 $1. Worst YTD first.</div>'
     + (redRows.length
-      ? '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>SECTOR</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
-        + redRows.map(r =>
+      ? '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>SECTOR</th>'
+        + sortableTh("red","day","TODAY") + sortableTh("red","w","5D") + sortableTh("red","m1","1M")
+        + sortableTh("red","m3","3M") + sortableTh("red","m6","6M") + sortableTh("red","ytd","YTD") + sortableTh("red","y1","1Y")
+        + '</tr></thead><tbody>'
+        + sortRows(redRows, state.sort.red.key, state.sort.red.dir).map(r =>
             '<tr><td>' + esc(r.t) + '</td>'
             + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.sector || '\u2014') + '</td>'
             + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
@@ -742,8 +781,11 @@ function render(){
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
     + '<div class="note">Top 50 stocks by 1-month gain, price \u2265 $1.</div>'
     + (month1Rows.length
-      ? '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>SECTOR</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
-        + month1Rows.map(r =>
+      ? '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>SECTOR</th>'
+        + sortableTh("month1","day","TODAY") + sortableTh("month1","w","5D") + sortableTh("month1","m1","1M")
+        + sortableTh("month1","m3","3M") + sortableTh("month1","m6","6M") + sortableTh("month1","ytd","YTD") + sortableTh("month1","y1","1Y")
+        + '</tr></thead><tbody>'
+        + sortRows(month1Rows, state.sort.month1.key, state.sort.month1.dir).map(r =>
             '<tr><td>' + esc(r.t) + '</td>'
             + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.sector || '\u2014') + '</td>'
             + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
@@ -758,8 +800,12 @@ function render(){
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
     + '<div class="note">Stocks showing up in 2 or more of: The 100%+ Club, Star Gainers, All Green, and 1 Month Gainers. Independent bullish signals lining up on the same ticker \u2014 sorted by how many lists it\u2019s in, then 1-year return.</div>'
     + (multiRows.length
-      ? '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>SECTOR</th><th>IN</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
-        + multiRows.map(r =>
+      ? '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>SECTOR</th>'
+        + sortableTh("multi","count","IN") + sortableTh("multi","day","TODAY") + sortableTh("multi","w","5D")
+        + sortableTh("multi","m1","1M") + sortableTh("multi","m3","3M") + sortableTh("multi","m6","6M")
+        + sortableTh("multi","ytd","YTD") + sortableTh("multi","y1","1Y")
+        + '</tr></thead><tbody>'
+        + sortRows(multiRows, state.sort.multi.key, state.sort.multi.dir).map(r =>
             '<tr><td>' + esc(r.t) + '</td>'
             + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.sector || '\u2014') + '</td>'
             + '<td>' + esc(r.inLists || '') + '</td>'
@@ -842,6 +888,11 @@ document.addEventListener("click", e => {
     ensurePeriod();
   } else if (a === "originFilter"){
     state.originFilter = state.originFilter === el.dataset.v ? null : el.dataset.v;
+  } else if (a === "sortCol"){
+    const section = el.dataset.section, key = el.dataset.key;
+    const cur = state.sort[section];
+    if (cur && cur.key === key) cur.dir = cur.dir === "asc" ? "desc" : "asc";
+    else state.sort[section] = { key, dir: "desc" };
   } else if (a === "family"){
     state.family = state.family === el.dataset.v ? null : el.dataset.v;
     state.selected.foundation = new Set();
