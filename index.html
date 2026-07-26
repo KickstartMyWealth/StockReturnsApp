@@ -118,6 +118,7 @@
   </div>
   <div id="freshness" class="freshness">Loading…</div>
   <div id="chips" class="chips"><span class="chips-empty">No filters selected yet</span></div>
+
 </header>
 
 <main id="main"></main>
@@ -143,7 +144,6 @@ const COUNTRY_ETFS = [
   {t:"EWU",n:"United Kingdom",grp:"Developed"},{t:"EIS",n:"Israel",grp:"Developed"},
   {t:"EWS",n:"Singapore",grp:"Developed"},{t:"EWH",n:"Hong Kong",grp:"Developed"},
   {t:"EDEN",n:"Denmark",grp:"Developed"},{t:"EFNL",n:"Finland",grp:"Developed"},
-
   {t:"EIRL",n:"Ireland",grp:"Developed"},{t:"ENOR",n:"Norway",grp:"Developed"},
   {t:"ENZL",n:"New Zealand",grp:"Developed"},{t:"EWY",n:"South Korea",grp:"Developed"},
   {t:"EWZ",n:"Brazil",grp:"Emerging"},{t:"EWW",n:"Mexico",grp:"Emerging"},
@@ -633,15 +633,20 @@ function sortRows(rows, key, dir){
     return dir === "asc" ? av - bv : bv - av;
   });
 }
-// Clickable <th> for a sortable column; shows ▲/▼ on whichever column is active.
+// Clickable <th> for a sortable column. Every sortable column shows a
+// neutral \u2195 hint; the active column is highlighted green with a
+// directional \u25b2/\u25bc arrow showing its current sort direction.
 function sortableTh(section, key, label){
   const s = state.sort[section];
   const active = s && s.key === key;
-  const arrow = active ? (s.dir === "asc" ? " \u25b2" : " \u25bc") : "";
+  const arrow = active ? (s.dir === "asc" ? " \u25b2" : " \u25bc") : " \u2195";
+  const style = active
+    ? "cursor:pointer;user-select:none;color:var(--teal);background:rgba(46,92,86,0.14);font-weight:700;"
+    : "cursor:pointer;user-select:none;";
   // Uses "data-tbl" (not "data-section") to avoid colliding with the
   // section-head expand/collapse buttons, which use "data-section" and
   // are checked first in the click handler below.
-  return '<th data-action="sortCol" data-tbl="'+section+'" data-key="'+key+'" style="cursor:pointer;user-select:none;">'+label+arrow+'</th>';
+  return '<th data-action="sortCol" data-tbl="'+section+'" data-key="'+key+'" style="'+style+'">'+label+arrow+'</th>';
 }
 
 function render(){
@@ -710,7 +715,8 @@ function render(){
     + (state.club ? ' End-of-day figures from a free full-market screen.' :
        ' Tap refresh to retry the live screen.')
     + '</div>'
-    + '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>SECTOR</th>'
+    + '<div class="gwrap"><table class="gtable"><thead><tr>'
+      + sortableTh("club","t","TICKER") + sortableTh("club","sector","SECTOR")
       + sortableTh("club","day","TODAY") + sortableTh("club","w","5D") + sortableTh("club","m1","1M")
       + sortableTh("club","m3","3M") + sortableTh("club","m6","6M") + sortableTh("club","ytd","YTD") + sortableTh("club","y1","1Y")
       + '</tr></thead><tbody>'
@@ -727,7 +733,8 @@ function render(){
       ? '<div class="group-label">' + freshnessLabel() + '</div>'
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
     + '<div class="note">Stocks setting new 52-week highs (WSJ new-highs style). Every day a stock makes a new high adds a star, up to ★★★★★ \u2014 stars are cumulative and never reset, even after a missed day. Date shown is when the star was last added.</div>'
-    + '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>SECTOR</th>'
+    + '<div class="gwrap"><table class="gtable"><thead><tr>'
+      + sortableTh("stars","t","TICKER") + sortableTh("stars","sector","SECTOR")
       + sortableTh("stars","stars","STARS") + sortableTh("stars","day","TODAY") + sortableTh("stars","w","5D")
       + sortableTh("stars","m1","1M") + sortableTh("stars","m3","3M") + sortableTh("stars","m6","6M")
       + sortableTh("stars","ytd","YTD") + sortableTh("stars","y1","1Y")
@@ -747,7 +754,8 @@ function render(){
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
     + '<div class="note">Stocks green in all six windows \u2014 5-day, 1-month, 3-month, 6-month, YTD, and 1-year \u2014 price \u2265 $1. Top 50 by 1-year return.</div>'
     + (greenRows.length
-      ? '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>SECTOR</th>'
+      ? '<div class="gwrap"><table class="gtable"><thead><tr>'
+        + sortableTh("green","t","TICKER") + sortableTh("green","sector","SECTOR")
         + sortableTh("green","day","TODAY") + sortableTh("green","w","5D") + sortableTh("green","m1","1M")
         + sortableTh("green","m3","3M") + sortableTh("green","m6","6M") + sortableTh("green","ytd","YTD") + sortableTh("green","y1","1Y")
         + '</tr></thead><tbody>'
@@ -766,7 +774,8 @@ function render(){
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
     + '<div class="note">Stocks red in all six windows \u2014 5-day, 1-month, 3-month, 6-month, YTD, and 1-year \u2014 price \u2265 $1. Worst YTD first.</div>'
     + (redRows.length
-      ? '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>SECTOR</th>'
+      ? '<div class="gwrap"><table class="gtable"><thead><tr>'
+        + sortableTh("red","t","TICKER") + sortableTh("red","sector","SECTOR")
         + sortableTh("red","day","TODAY") + sortableTh("red","w","5D") + sortableTh("red","m1","1M")
         + sortableTh("red","m3","3M") + sortableTh("red","m6","6M") + sortableTh("red","ytd","YTD") + sortableTh("red","y1","1Y")
         + '</tr></thead><tbody>'
@@ -785,7 +794,8 @@ function render(){
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
     + '<div class="note">Top 50 stocks by 1-month gain, price \u2265 $1.</div>'
     + (month1Rows.length
-      ? '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>SECTOR</th>'
+      ? '<div class="gwrap"><table class="gtable"><thead><tr>'
+        + sortableTh("month1","t","TICKER") + sortableTh("month1","sector","SECTOR")
         + sortableTh("month1","day","TODAY") + sortableTh("month1","w","5D") + sortableTh("month1","m1","1M")
         + sortableTh("month1","m3","3M") + sortableTh("month1","m6","6M") + sortableTh("month1","ytd","YTD") + sortableTh("month1","y1","1Y")
         + '</tr></thead><tbody>'
@@ -804,7 +814,8 @@ function render(){
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
     + '<div class="note">Stocks showing up in 2 or more of: The 100%+ Club, Star Gainers, All Green, and 1 Month Gainers. Independent bullish signals lining up on the same ticker \u2014 sorted by how many lists it\u2019s in, then 1-year return.</div>'
     + (multiRows.length
-      ? '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>SECTOR</th>'
+      ? '<div class="gwrap"><table class="gtable"><thead><tr>'
+        + sortableTh("multi","t","TICKER") + sortableTh("multi","sector","SECTOR")
         + sortableTh("multi","count","IN") + sortableTh("multi","day","TODAY") + sortableTh("multi","w","5D")
         + sortableTh("multi","m1","1M") + sortableTh("multi","m3","3M") + sortableTh("multi","m6","6M")
         + sortableTh("multi","ytd","YTD") + sortableTh("multi","y1","1Y")
