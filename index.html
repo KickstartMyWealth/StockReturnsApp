@@ -732,7 +732,7 @@ function render(){
       + '</tr></thead><tbody>'
     + sortRows(clubRows, state.sort.club.key, state.sort.club.dir).map(r =>
         '<tr><td>' + esc(r.t) + '</td>'
-        + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.sector || '\u2014') + '</td>'
+        + '<td title="' + esc(r.sector || '\u2014') + '" style="text-align:left;color:var(--ink-faint);font-size:10.5px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(r.sector || '\u2014') + '</td>'
         + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
         + '</tr>').join('')
     + '</tbody></table></div>';
@@ -751,7 +751,7 @@ function render(){
       + '</tr></thead><tbody>'
     + sortRows(starRows, state.sort.stars.key, state.sort.stars.dir).map(r =>
         '<tr><td>' + esc(r.t) + '</td>'
-        + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.sector || '\u2014') + '</td>'
+        + '<td title="' + esc(r.sector || '\u2014') + '" style="text-align:left;color:var(--ink-faint);font-size:10.5px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(r.sector || '\u2014') + '</td>'
         + '<td>' + "\u2605".repeat(Math.min(r.stars||1,5)) + (r.since?' \u00b7 '+fmtDate(r.since):'') + '</td>'
         + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
         + '</tr>').join('')
@@ -771,7 +771,7 @@ function render(){
         + '</tr></thead><tbody>'
         + sortRows(greenRows, state.sort.green.key, state.sort.green.dir).map(r =>
             '<tr><td>' + esc(r.t) + '</td>'
-            + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.sector || '\u2014') + '</td>'
+            + '<td title="' + esc(r.sector || '\u2014') + '" style="text-align:left;color:var(--ink-faint);font-size:10.5px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(r.sector || '\u2014') + '</td>'
             + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
             + '</tr>').join('')
         + '</tbody></table></div>'
@@ -791,7 +791,7 @@ function render(){
         + '</tr></thead><tbody>'
         + sortRows(redRows, state.sort.red.key, state.sort.red.dir).map(r =>
             '<tr><td>' + esc(r.t) + '</td>'
-            + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.sector || '\u2014') + '</td>'
+            + '<td title="' + esc(r.sector || '\u2014') + '" style="text-align:left;color:var(--ink-faint);font-size:10.5px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(r.sector || '\u2014') + '</td>'
             + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
             + '</tr>').join('')
         + '</tbody></table></div>'
@@ -811,7 +811,7 @@ function render(){
         + '</tr></thead><tbody>'
         + sortRows(month1Rows, state.sort.month1.key, state.sort.month1.dir).map(r =>
             '<tr><td>' + esc(r.t) + '</td>'
-            + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.sector || '\u2014') + '</td>'
+            + '<td title="' + esc(r.sector || '\u2014') + '" style="text-align:left;color:var(--ink-faint);font-size:10.5px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(r.sector || '\u2014') + '</td>'
             + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
             + '</tr>').join('')
         + '</tbody></table></div>'
@@ -832,7 +832,7 @@ function render(){
         + '</tr></thead><tbody>'
         + sortRows(multiRows, state.sort.multi.key, state.sort.multi.dir).map(r =>
             '<tr><td>' + esc(r.t) + '</td>'
-            + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.sector || '\u2014') + '</td>'
+            + '<td title="' + esc(r.sector || '\u2014') + '" style="text-align:left;color:var(--ink-faint);font-size:10.5px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(r.sector || '\u2014') + '</td>'
             + '<td>' + esc(r.inLists || '') + '</td>'
             + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
             + '</tr>').join('')
