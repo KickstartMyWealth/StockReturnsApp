@@ -126,7 +126,6 @@
 <script>
 "use strict";
 /* ================================================================ *
-
  *  STATIC DATA
  * ================================================================ */
 const TIMEFRAMES = ["1M","2M","3M","YTD","1Y"];
@@ -163,6 +162,7 @@ const SECTOR_ETFS = [
   {t:"XLV",n:"Health Care"},{t:"XLY",n:"Consumer Discretionary"},{t:"XLP",n:"Consumer Staples"},
   {t:"XLI",n:"Industrials"},{t:"XLU",n:"Utilities"},{t:"XLB",n:"Materials"},{t:"XLRE",n:"Real Estate"},
   {t:"QQQ",n:"Nasdaq-100"},{t:"TOPT",n:"iShares Top 20 US Stocks"}
+
 ];
 
 const FAMILIES = ["Schwab","Vanguard","iShares"];
@@ -408,7 +408,7 @@ const state = {
   allRed: null,        // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
   oneMonthGainers: null, // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
   multiListed: null,   // [{t, price, w, m1, m3, m6, ytd, y1, count, inLists}] from data.json
-  search: { query: "", loading: false, error: null, result: null },
+  search: { query: "", loading: false, error: null, result: null, chart: null, chartLoading: false },
   originFilter: null,   // "Country" | "Sector" | "ETFs" | null (section 01 origin filter)
   sort: {                // per-table client-side sort: { key, dir } — click a column header to change
     all: { key: "m1", dir: "desc" },
@@ -492,6 +492,56 @@ async function fetchScreenerMap(){
 // surfaces unrelated funds that merely mention the word "Google").
 const SEARCH_ALIASES = { google: "alphabet", facebook: "meta platforms", fb: "meta platforms" };
 
+// Major index benchmarks for the Search chart, via their tracking ETFs
+// (Stooq doesn't serve raw index tickers like ^GSPC for free, but these
+// ETFs track their indices closely enough for a visual comparison).
+const BENCHMARKS = [
+  { key: "SPY", label: "S&P 500", color: "#2E5C56" },
+  { key: "QQQ", label: "Nasdaq", color: "#A8823C" },
+  { key: "IWM", label: "Russell 2000", color: "#8C4A3A" },
+  { key: "DIA", label: "DJIA", color: "#5B6259" },
+];
+const CHART_TICKER_COLOR = "#2563EB";
+
+// Last ~3 months of daily closes for one ticker, via the same Stooq path
+// used by the app's main data flow.
+async function fetchHistory3M(t){
+  const csv = await fetchWithProxies(STOOQ_HISTORY(t));
+  const hist = parseHistory(csv);
+  if (!hist.length) return null;
+  const lastDate = new Date(hist[hist.length-1].d + "T00:00:00");
+  const cutoff = new Date(lastDate); cutoff.setMonth(cutoff.getMonth() - 3);
+  return hist.filter(p => new Date(p.d + "T00:00:00") >= cutoff);
+}
+
+// Benchmark histories rarely change within a session, so fetch once and reuse.
+let _benchmarkCache = null;
+async function fetchBenchmarkHistories(){
+  if (_benchmarkCache) return _benchmarkCache;
+  const results = await Promise.all(BENCHMARKS.map(b => fetchHistory3M(b.key).catch(() => null)));
+  _benchmarkCache = BENCHMARKS.map((b, i) => ({ ...b, hist: results[i] }));
+  return _benchmarkCache;
+}
+
+// Build normalized (% change from window start) series for the searched
+// ticker plus every available benchmark, trimmed to the same trading-day
+// window so all lines start together and compare fairly.
+function buildChartData(ticker, tickerHist, benchmarks){
+  const raw = [
+    { label: ticker, color: CHART_TICKER_COLOR, hist: tickerHist },
+    ...benchmarks.filter(b => b.hist && b.hist.length > 1).map(b => ({ label: b.label, color: b.color, hist: b.hist })),
+  ];
+  if (raw.length < 2) return null; // need the ticker plus at least one benchmark
+  const minLen = Math.min(...raw.map(s => s.hist.length));
+  if (minLen < 2) return null;
+  const series = raw.map(s => {
+    const trimmed = s.hist.slice(-minLen);
+    const base = trimmed[0].c;
+    return { label: s.label, color: s.color, pts: trimmed.map(p => ((p.c / base) - 1) * 100) };
+  });
+  return { series, asOf: raw[0].hist[raw[0].hist.length - 1].d };
+}
+
 async function resolveTickers(query){
   const qRaw = query.trim();
   if (!qRaw) throw new Error("empty");
@@ -543,7 +593,9 @@ async function performSearch(){
   if (!q || !q.trim()) return;
   state.search.query = q;
   state.search.loading = true; state.search.error = null; state.search.result = null;
+  state.search.chart = null; state.search.chartLoading = false;
   render();
+  let primaryTicker = null;
   try {
     const list = await resolveTickers(q);
     const num = x => { const nn = Number(x); return Number.isFinite(nn) ? nn : null; };
@@ -553,11 +605,30 @@ async function performSearch(){
       m6: num(v.ch6m), ytd: num(v.chYTD), y1: num(v.ch1y),
       inLists: findListings(t)
     }));
+    primaryTicker = list[0] && list[0].t;
   } catch (e) {
     state.search.error = "Couldn't find that ticker or company. Try the exact ticker symbol.";
   }
   state.search.loading = false;
   render();
+
+  // Chart: fetched separately so the results table isn't held up waiting
+  // on 3 months of daily history for 5 different symbols.
+  if (primaryTicker){
+    state.search.chartLoading = true;
+    render();
+    try {
+      const [tickerHist, benchmarks] = await Promise.all([
+        fetchHistory3M(primaryTicker),
+        fetchBenchmarkHistories(),
+      ]);
+      if (tickerHist && tickerHist.length > 1){
+        state.search.chart = buildChartData(primaryTicker, tickerHist, benchmarks);
+      }
+    } catch (e) {}
+    state.search.chartLoading = false;
+    render();
+  }
 }
 // "YYYY-MM-DD" -> "MM/DD/YY"
 function fmtDate(d){
@@ -589,6 +660,42 @@ function pctTd(v, decimals){
   if (v == null) return '<td>\u2014</td>';
   const cls = v >= 0 ? "pos" : "neg";
   return '<td class="'+cls+'">'+(v>=0?"+":"")+v.toFixed(decimals)+'%</td>';
+}
+
+// Lightweight custom SVG line chart \u2014 normalized (% change from the
+// start of the window) so a stock's price and an index's price level are
+// directly comparable on the same axis. No charting library needed.
+function renderChartSVG(chart){
+  if (!chart) return "";
+  const { series, asOf } = chart;
+  const allPts = series.flatMap(s => s.pts);
+  const minY = Math.min(...allPts, 0), maxY = Math.max(...allPts, 0);
+  const padY = (maxY - minY) * 0.12 || 1;
+  const yLo = minY - padY, yHi = maxY + padY;
+  const W = 640, H = 220, padL = 40, padR = 8, padT = 12, padB = 10;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const n = series[0].pts.length;
+  const xFor = i => padL + (n === 1 ? 0 : (i / (n - 1))) * plotW;
+  const yFor = v => padT + (1 - (v - yLo) / (yHi - yLo)) * plotH;
+  const zeroY = yFor(0);
+  const pathFor = s => s.pts.map((v, i) => (i === 0 ? "M" : "L") + xFor(i).toFixed(1) + "," + yFor(v).toFixed(1)).join(" ");
+  const lines = series.map((s, i) =>
+    '<path d="' + pathFor(s) + '" fill="none" stroke="' + s.color + '" stroke-width="' + (i === 0 ? 2.5 : 1.5) + '" />'
+  ).join("");
+  const yLabel = v => '<text x="4" y="' + (yFor(v) + 3).toFixed(1) + '" font-size="9" fill="var(--ink-faint)" font-family="var(--mono)">' + (v >= 0 ? "+" : "") + v.toFixed(0) + "%</text>";
+  const legend = series.map(s =>
+    '<span style="display:inline-flex;align-items:center;gap:4px;margin-right:12px;margin-bottom:4px;">'
+    + '<span style="width:9px;height:9px;border-radius:2px;background:' + s.color + ';display:inline-block;flex-shrink:0;"></span>'
+    + esc(s.label) + ' <span style="color:' + (s.pts[s.pts.length-1]>=0?"var(--teal)":"var(--rust)") + ';font-weight:600;">'
+    + (s.pts[s.pts.length-1]>=0?"+":"") + s.pts[s.pts.length-1].toFixed(1) + '%</span></span>'
+  ).join("");
+  return '<div class="group-label">3-MONTH PERFORMANCE VS. BENCHMARKS' + (asOf ? ' \u00b7 THROUGH ' + esc(fmtDate(asOf) || asOf) : '') + '</div>'
+    + '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;display:block;background:var(--paper);border:1px solid var(--line);border-radius:8px;">'
+    + '<line x1="' + padL + '" y1="' + zeroY.toFixed(1) + '" x2="' + (W - padR) + '" y2="' + zeroY.toFixed(1) + '" stroke="var(--line)" stroke-dasharray="3,3" />'
+    + yLabel(yHi) + yLabel(0) + yLabel(yLo)
+    + lines
+    + '</svg>'
+    + '<div style="display:flex;flex-wrap:wrap;padding-top:8px;font-family:var(--mono);font-size:10.5px;color:var(--ink-faint);">' + legend + '</div>';
 }
 
 function rowHTML({rank,t,n,price,day,ret,showRet}){
@@ -878,7 +985,9 @@ function render(){
             + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
             + '</tr>').join('')
         + '</tbody></table></div>'
-      : '');
+      : '')
+    + (state.search.chartLoading ? '<div class="note" style="margin-top:8px;">Loading 3-month chart\u2026</div>' : '')
+    + (state.search.chart ? '<div style="margin-top:6px;">' + renderChartSVG(state.search.chart) + '</div>' : '');
 
   $("#main").innerHTML =
       sectionHTML("all","01","Base ETFs, Country, Sectors", 0, allBody)
