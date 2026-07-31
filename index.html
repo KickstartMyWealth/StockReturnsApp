@@ -145,6 +145,7 @@ const COUNTRY_ETFS = [
   {t:"EDEN",n:"Denmark",grp:"Developed"},{t:"EFNL",n:"Finland",grp:"Developed"},
   {t:"EIRL",n:"Ireland",grp:"Developed"},{t:"ENOR",n:"Norway",grp:"Developed"},
   {t:"ENZL",n:"New Zealand",grp:"Developed"},{t:"EWY",n:"South Korea",grp:"Developed"},
+
   {t:"EWZ",n:"Brazil",grp:"Emerging"},{t:"EWW",n:"Mexico",grp:"Emerging"},
   {t:"EWT",n:"Taiwan",grp:"Emerging"},{t:"EZA",n:"South Africa",grp:"Emerging"},
   {t:"INDA",n:"India",grp:"Emerging"},{t:"MCHI",n:"China (MSCI)",grp:"Emerging"},
@@ -408,10 +409,12 @@ const state = {
   allRed: null,        // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
   oneMonthGainers: null, // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
   multiListed: null,   // [{t, price, w, m1, m3, m6, ytd, y1, count, inLists}] from data.json
+  etf1YClub: null,      // [{t, n, price, day, w, m1, m3, m6, ytd, y1}] from data.json — whole-ETF-market screen
   search: { query: "", loading: false, error: null, result: null, chart: null, chartLoading: false },
   originFilter: null,   // "Country" | "Sector" | "ETFs" | null (section 01 origin filter)
   sort: {                // per-table client-side sort: { key, dir } — click a column header to change
     all: { key: "m1", dir: "desc" },
+    etf1y: { key: "y1", dir: "desc" },
     club: { key: "ytd", dir: "desc" },
     stars: { key: "stars", dir: "desc" },
     green: { key: "y1", dir: "desc" },
@@ -822,6 +825,26 @@ function render(){
         + '</tr>').join('')
     + '</tbody></table></div>';
 
+  const etf1yRows = state.etf1YClub || [];
+  const etf1yBody =
+    (etf1yRows.length
+      ? '<div class="group-label">' + freshnessLabel() + '</div>'
+      : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
+    + '<div class="note">Every ETF across the whole market (NYSE, Nasdaq) up 100%+ over the trailing 1 year, price \u2265 $1 \u2014 mostly leveraged and single-stock funds. Sorted by 1-year return by default.</div>'
+    + (etf1yRows.length
+      ? '<div class="gwrap"><table class="gtable"><thead><tr>'
+        + sortableTh("etf1y","t","TICKER") + sortableTh("etf1y","n","NAME")
+        + sortableTh("etf1y","day","TODAY") + sortableTh("etf1y","w","5D") + sortableTh("etf1y","m1","1M")
+        + sortableTh("etf1y","m3","3M") + sortableTh("etf1y","m6","6M") + sortableTh("etf1y","ytd","YTD") + sortableTh("etf1y","y1","1Y")
+        + '</tr></thead><tbody>'
+        + sortRows(etf1yRows, state.sort.etf1y.key, state.sort.etf1y.dir).map(r =>
+            '<tr><td>' + esc(r.t) + '</td>'
+            + '<td title="' + esc(r.n) + '" style="text-align:left;color:var(--ink-faint);font-size:10.5px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(r.n) + '</td>'
+            + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
+            + '</tr>').join('')
+        + '</tbody></table></div>'
+      : '');
+
   const clubRows = state.club ?? CLUB_FALLBACK;
   const clubFresh = state.club
     ? '<div class="group-label">' + freshnessLabel() + '</div>'
@@ -992,13 +1015,14 @@ function render(){
   $("#main").innerHTML =
       sectionHTML("foundation","01","Foundation ETFs", 0, foundationBody)
     + sectionHTML("all","02","Base ETFs, Country, Sectors", 0, allBody)
-    + sectionHTML("club100","03","The 100%+ Club YTD", state.selected.club100.size, clubBody)
-    + sectionHTML("stars","04","Star Gainers", state.selected.stars.size, starsBody)
-    + sectionHTML("green","05","All Green All Year", 0, greenBody)
-    + sectionHTML("red","06","Shorts - All Red All Year", 0, redBody)
-    + sectionHTML("month1","07","1 Month Gainers", 0, month1Body)
-    + sectionHTML("multi","08","Tickers Listed Above Multiple Times", 0, multiBody)
-    + sectionHTML("search","09","Search", 0, searchBody)
+    + sectionHTML("etf1y","03","ETFs above 100% 1Y", 0, etf1yBody)
+    + sectionHTML("club100","04","The 100%+ Club YTD", state.selected.club100.size, clubBody)
+    + sectionHTML("stars","05","Star Gainers", state.selected.stars.size, starsBody)
+    + sectionHTML("green","06","All Green All Year", 0, greenBody)
+    + sectionHTML("red","07","Shorts - All Red All Year", 0, redBody)
+    + sectionHTML("month1","08","1 Month Gainers", 0, month1Body)
+    + sectionHTML("multi","09","Tickers Listed Above Multiple Times", 0, multiBody)
+    + sectionHTML("search","10","Search", 0, searchBody)
     + '<div class="spacer"></div>';
 }
 
@@ -1087,6 +1111,7 @@ async function loadData(force){
         allRed: j.allRed || null,
         oneMonthGainers: j.oneMonthGainers || null,
         multiListed: j.multiListed || null,
+        etf1YClub: j.etf1YClub || null,
         clubSource: j.club ? (j.clubSource || "screen") : null,
         clubFetchedAt: j.generatedAt ? new Date(j.generatedAt) : null,
         loading: false
