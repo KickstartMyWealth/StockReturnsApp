@@ -990,14 +990,14 @@ function render(){
     + (state.search.chart ? '<div style="margin-top:6px;">' + renderChartSVG(state.search.chart) + '</div>' : '');
 
   $("#main").innerHTML =
-      sectionHTML("all","01","Base ETFs, Country, Sectors", 0, allBody)
-    + sectionHTML("club100","02","The 100%+ Club YTD", state.selected.club100.size, clubBody)
-    + sectionHTML("stars","03","Star Gainers", state.selected.stars.size, starsBody)
-    + sectionHTML("green","04","All Green All Year", 0, greenBody)
-    + sectionHTML("red","05","Shorts - All Red All Year", 0, redBody)
-    + sectionHTML("month1","06","1 Month Gainers", 0, month1Body)
-    + sectionHTML("multi","07","Tickers Listed Above Multiple Times", 0, multiBody)
-    + sectionHTML("foundation","08","Foundation ETFs", 0, foundationBody)
+      sectionHTML("foundation","01","Foundation ETFs", 0, foundationBody)
+    + sectionHTML("all","02","Base ETFs, Country, Sectors", 0, allBody)
+    + sectionHTML("club100","03","The 100%+ Club YTD", state.selected.club100.size, clubBody)
+    + sectionHTML("stars","04","Star Gainers", state.selected.stars.size, starsBody)
+    + sectionHTML("green","05","All Green All Year", 0, greenBody)
+    + sectionHTML("red","06","Shorts - All Red All Year", 0, redBody)
+    + sectionHTML("month1","07","1 Month Gainers", 0, month1Body)
+    + sectionHTML("multi","08","Tickers Listed Above Multiple Times", 0, multiBody)
     + sectionHTML("search","09","Search", 0, searchBody)
     + '<div class="spacer"></div>';
 }
