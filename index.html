@@ -496,25 +496,33 @@ async function fetchScreenerMap(){
 const SEARCH_ALIASES = { google: "alphabet", facebook: "meta platforms", fb: "meta platforms" };
 
 // Major index benchmarks for the Search chart, via their tracking ETFs
-// (Stooq doesn't serve raw index tickers like ^GSPC for free, but these
-// ETFs track their indices closely enough for a visual comparison).
+// (this API doesn't serve raw index tickers like ^GSPC for free, but
+// these ETFs track their indices closely enough for a visual comparison).
+// Colors deliberately avoid red/rust tones so nothing is confusable with
+// the searched ticker's red line below.
 const BENCHMARKS = [
   { key: "SPY", label: "S&P 500", color: "#2E5C56" },
   { key: "QQQ", label: "Nasdaq", color: "#A8823C" },
-  { key: "IWM", label: "Russell 2000", color: "#8C4A3A" },
+  { key: "IWM", label: "Russell 2000", color: "#2563EB" },
   { key: "DIA", label: "DJIA", color: "#5B6259" },
 ];
-const CHART_TICKER_COLOR = "#2563EB";
+const CHART_TICKER_COLOR = "#DC2626";
 
-// Last ~3 months of daily closes for one ticker, via the same Stooq path
-// used by the app's main data flow.
+// Last ~3 months of daily closes for one ticker, via stockanalysis.com's
+// own chart API (same direct-CORS origin already used elsewhere in the
+// app for search/screener data — no CORS proxy needed, unlike the
+// Stooq-based path used for the rest of the app's return calculations,
+// which is more failure-prone since it depends on third-party proxies).
 async function fetchHistory3M(t){
-  const csv = await fetchWithProxies(STOOQ_HISTORY(t));
-  const hist = parseHistory(csv);
-  if (!hist.length) return null;
-  const lastDate = new Date(hist[hist.length-1].d + "T00:00:00");
-  const cutoff = new Date(lastDate); cutoff.setMonth(cutoff.getMonth() - 3);
-  return hist.filter(p => new Date(p.d + "T00:00:00") >= cutoff);
+  const url = "https://stockanalysis.com/api/symbol/s/" + encodeURIComponent(t) + "/history?range=3M&period=Daily";
+  const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  const j = await res.json();
+  const data = j?.data;
+  if (!Array.isArray(data) || !data.length) return null;
+  // The API returns newest-first; reverse to oldest-first to match the
+  // {d, c} convention the rest of the chart code expects.
+  return data.map(p => ({ d: p.t, c: p.c })).reverse();
 }
 
 // Benchmark histories rarely change within a session, so fetch once and reuse.
