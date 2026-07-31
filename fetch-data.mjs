@@ -20,6 +20,7 @@ const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 const YAHOO = t => `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(t)}?range=1y&interval=1d`;
 const STOOQ = t => `https://stooq.com/q/d/l/?s=${t.toLowerCase()}.us&i=d`;
 const SCREEN_URL = "https://stockanalysis.com/_api/endpoints/screener/data-points?type=s&ids=chYTD+price+high52+ch1w+ch1m+ch3m+ch6m+ch1y+change+volume+sector";
+const ETF_SCREEN_URL = "https://stockanalysis.com/_api/endpoints/screener/data-points?type=e&ids=chYTD+price+high52+ch1w+ch1m+ch3m+ch6m+ch1y+change+volume+name";
 const MIN_VOLUME = 10000; // shares/day floor; below this, real-world tradability is unreliable (thin books, wide spreads, broker restrictions on newly-listed micro-caps)
 
 async function fetchJSON(url) {
@@ -247,6 +248,30 @@ async function main() {
     console.warn("Market screen failed:", e.message);
   }
 
+  // ---- ETFs above 100% 1Y: whole-ETF-market screen, separate from the
+  // stock screen above (funds live under a different "type" on this API
+  // and don’t carry a "sector", so they get their own name-based table). ----
+  let etf1YClub = null;
+  try {
+    const j = await fetchJSON(ETF_SCREEN_URL);
+    const map = j?.data?.data || {};
+    // Leveraged/inverse ETFs can legitimately post very large 1-year moves
+    // (verified live: 2x/3x sector and single-stock ETFs over 1000%), so
+    // this cap is only a defensive guard against outright data errors.
+    const Y1_SANITY_CAP = 5000; // percent
+    const RWe = x => { const n = Number(x); return Number.isFinite(n) ? +n.toFixed(1) : null; };
+    const rows = Object.entries(map)
+      .map(([t, v]) => ({ t, n: v.name || t, price: Number(v.price), y1: Number(v.ch1y), day: Number(v.change),
+        w: RWe(v.ch1w), m1: RWe(v.ch1m), m3: RWe(v.ch3m), m6: RWe(v.ch6m), ytd: RWe(v.chYTD), volume: Number(v.volume) }))
+      .filter(r => Number.isFinite(r.price) && Number.isFinite(r.y1) && r.price >= 1 && r.y1 > 100 && r.y1 <= Y1_SANITY_CAP
+        && Number.isFinite(r.volume) && r.volume >= MIN_VOLUME)
+      .sort((a, b) => b.y1 - a.y1)
+      .map(({ volume, ...r }) => ({ ...r, price: +r.price.toFixed(2), y1: +r.y1.toFixed(2), day: Number.isFinite(r.day) ? +r.day.toFixed(2) : null }));
+    if (rows.length) etf1YClub = rows;
+  } catch (e) {
+    console.warn("ETF market screen failed:", e.message);
+  }
+
   const dates = Object.values(returns).map(r => r.asOf).sort();
   const payload = {
     generatedAt: new Date().toISOString(),
@@ -261,9 +286,10 @@ async function main() {
     allRed,
     oneMonthGainers,
     multiListed,
+    etf1YClub,
   };
   writeFileSync("data.json", JSON.stringify(payload));
-  console.log(`Wrote data.json — ${Object.keys(returns).length} tickers ok, ${failed} failed, club: ${club ? club.length : "unavailable"}, stars: ${starGainers ? starGainers.length : "unavailable"}, green: ${allGreen ? allGreen.length : "unavailable"}, red: ${allRed ? allRed.length : "unavailable"}, oneMonth: ${oneMonthGainers ? oneMonthGainers.length : "unavailable"}, multiListed: ${multiListed ? multiListed.length : "unavailable"}`);
+  console.log(`Wrote data.json — ${Object.keys(returns).length} tickers ok, ${failed} failed, club: ${club ? club.length : "unavailable"}, stars: ${starGainers ? starGainers.length : "unavailable"}, green: ${allGreen ? allGreen.length : "unavailable"}, red: ${allRed ? allRed.length : "unavailable"}, oneMonth: ${oneMonthGainers ? oneMonthGainers.length : "unavailable"}, multiListed: ${multiListed ? multiListed.length : "unavailable"}, etf1YClub: ${etf1YClub ? etf1YClub.length : "unavailable"}`);
   if (Object.keys(returns).length < 10) process.exit(1); // don't commit a broken file
 }
 
