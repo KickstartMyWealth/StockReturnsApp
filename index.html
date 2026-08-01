@@ -611,12 +611,29 @@ async function performSearch(){
   try {
     const list = await resolveTickers(q);
     const num = x => { const nn = Number(x); return Number.isFinite(nn) ? nn : null; };
-    state.search.result = list.map(({ t, n, v }) => ({
-      t, n,
-      day: num(v.change), w: num(v.ch1w), m1: num(v.ch1m), m3: num(v.ch3m),
-      m6: num(v.ch6m), ytd: num(v.chYTD), y1: num(v.ch1y),
-      inLists: findListings(t)
-    }));
+    state.search.result = list.map(({ t, n, v }) => {
+      // Prefer the app's own Yahoo-sourced batch data when this ticker is
+      // already part of the tracked list (e.g. SCHB, also shown under
+      // Foundation ETFs / Base ETFs) — otherwise Search would show a
+      // second, slightly different number from a different data provider
+      // for the exact same ticker. Falls back to the live lookup for any
+      // ticker outside that fixed list, which is most of what Search is for.
+      const batch = state.returns[t];
+      if (batch){
+        return {
+          t, n,
+          day: batch["1D"] ?? null, w: batch["5D"] ?? null, m1: batch["1M"] ?? null,
+          m3: batch["3M"] ?? null, m6: batch["6M"] ?? null, ytd: batch["YTD"] ?? null, y1: batch["1Y"] ?? null,
+          inLists: findListings(t)
+        };
+      }
+      return {
+        t, n,
+        day: num(v.change), w: num(v.ch1w), m1: num(v.ch1m), m3: num(v.ch3m),
+        m6: num(v.ch6m), ytd: num(v.chYTD), y1: num(v.ch1y),
+        inLists: findListings(t)
+      };
+    });
     primaryTicker = list[0] && list[0].t;
   } catch (e) {
     state.search.error = "Couldn't find that ticker or company. Try the exact ticker symbol.";
