@@ -135,6 +135,7 @@ const ORIGIN_KEY = { Country: "country", Sector: "sector", ETFs: "foundation" };
 
 const COUNTRY_ETFS = [
   {t:"EWJ",n:"Japan",grp:"Developed"},{t:"EWA",n:"Australia",grp:"Developed"},
+
   {t:"EWC",n:"Canada",grp:"Developed"},{t:"EWG",n:"Germany",grp:"Developed"},
   {t:"EWQ",n:"France",grp:"Developed"},{t:"EWI",n:"Italy",grp:"Developed"},
   {t:"EWL",n:"Switzerland",grp:"Developed"},{t:"EWN",n:"Netherlands",grp:"Developed"},
@@ -293,7 +294,6 @@ async function askClaudeJSON(prompt){
     headers:{ "Content-Type":"application/json" },
     body: JSON.stringify({
       model:"claude-sonnet-4-6",
-      max_tokens:1000,
       messages:[{ role:"user", content:prompt }],
       tools:[{ type:"web_search_20250305", name:"web_search" }]
     })
@@ -416,6 +416,7 @@ const state = {
   sort: {                // per-table client-side sort: { key, dir } — click a column header to change
     all: { key: "m1", dir: "desc" },
     etf1y: { key: "y1", dir: "desc" },
+    search: { key: "m3", dir: "desc" },
     club: { key: "ytd", dir: "desc" },
     stars: { key: "stars", dir: "desc" },
     green: { key: "y1", dir: "desc" },
@@ -539,19 +540,32 @@ async function fetchBenchmarkHistories(){
 // ticker plus every available benchmark, trimmed to the same trading-day
 // window so all lines start together and compare fairly.
 function buildChartData(ticker, tickerHist, benchmarks){
-  const raw = [
-    { label: ticker, color: CHART_TICKER_COLOR, hist: tickerHist },
-    ...benchmarks.filter(b => b.hist && b.hist.length > 1).map(b => ({ label: b.label, color: b.color, hist: b.hist })),
-  ];
-  if (raw.length < 2) return null; // need the ticker plus at least one benchmark
-  const minLen = Math.min(...raw.map(s => s.hist.length));
-  if (minLen < 2) return null;
-  const series = raw.map(s => {
-    const trimmed = s.hist.slice(-minLen);
-    const base = trimmed[0].c;
-    return { label: s.label, color: s.color, pts: trimmed.map(p => ((p.c / base) - 1) * 100) };
-  });
-  return { series, asOf: raw[0].hist[raw[0].hist.length - 1].d };
+  const validBenchmarks = benchmarks.filter(b => b.hist && b.hist.length > 1);
+  if (!validBenchmarks.length || !tickerHist || tickerHist.length < 2) return null;
+
+  // The benchmark window is derived ONLY from the benchmarks themselves,
+  // never from the searched ticker’s history length. Benchmark data is
+  // cached and identical every search, so this window — and therefore
+  // every benchmark line’s shape and % values — stays fixed regardless
+  // of which ticker was searched (previously it was re-trimmed and
+  // re-normalized to match whichever ticker had the shortest history,
+  // which is why the benchmark lines appeared to change between searches).
+  const benchLen = Math.min(...validBenchmarks.map(b => b.hist.length));
+  const toPts = hist => {
+    const base = hist[0].c;
+    return hist.map(p => ({ d: p.d, pct: ((p.c / base) - 1) * 100 }));
+  };
+  const benchTrimmed = validBenchmarks.map(b => b.hist.slice(-benchLen));
+  const axisDates = benchTrimmed[0].map(p => p.d); // shared date axis, oldest to newest
+  const benchSeries = validBenchmarks.map((b, i) => ({ label: b.label, color: b.color, pts: toPts(benchTrimmed[i]) }));
+
+  // The ticker uses its own available window (which may be shorter than
+  // the benchmarks’, e.g. a recent IPO) and is normalized from its own
+  // start — it is never forced to match the benchmark window’s length.
+  const tickerHistTrimmed = tickerHist.length > benchLen ? tickerHist.slice(-benchLen) : tickerHist;
+  const tickerSeries = { label: ticker, color: CHART_TICKER_COLOR, pts: toPts(tickerHistTrimmed) };
+
+  return { series: [tickerSeries, ...benchSeries], axisDates, asOf: axisDates[axisDates.length - 1] };
 }
 
 async function resolveTickers(query){
@@ -611,29 +625,12 @@ async function performSearch(){
   try {
     const list = await resolveTickers(q);
     const num = x => { const nn = Number(x); return Number.isFinite(nn) ? nn : null; };
-    state.search.result = list.map(({ t, n, v }) => {
-      // Prefer the app's own Yahoo-sourced batch data when this ticker is
-      // already part of the tracked list (e.g. SCHB, also shown under
-      // Foundation ETFs / Base ETFs) — otherwise Search would show a
-      // second, slightly different number from a different data provider
-      // for the exact same ticker. Falls back to the live lookup for any
-      // ticker outside that fixed list, which is most of what Search is for.
-      const batch = state.returns[t];
-      if (batch){
-        return {
-          t, n,
-          day: batch["1D"] ?? null, w: batch["5D"] ?? null, m1: batch["1M"] ?? null,
-          m3: batch["3M"] ?? null, m6: batch["6M"] ?? null, ytd: batch["YTD"] ?? null, y1: batch["1Y"] ?? null,
-          inLists: findListings(t)
-        };
-      }
-      return {
-        t, n,
-        day: num(v.change), w: num(v.ch1w), m1: num(v.ch1m), m3: num(v.ch3m),
-        m6: num(v.ch6m), ytd: num(v.chYTD), y1: num(v.ch1y),
-        inLists: findListings(t)
-      };
-    });
+    state.search.result = list.map(({ t, n, v }) => ({
+      t, n,
+      day: num(v.change), w: num(v.ch1w), m1: num(v.ch1m), m3: num(v.ch3m),
+      m6: num(v.ch6m), ytd: num(v.chYTD), y1: num(v.ch1y),
+      inLists: findListings(t)
+    }));
     primaryTicker = list[0] && list[0].t;
   } catch (e) {
     state.search.error = "Couldn't find that ticker or company. Try the exact ticker symbol.";
@@ -696,28 +693,44 @@ function pctTd(v, decimals){
 // directly comparable on the same axis. No charting library needed.
 function renderChartSVG(chart){
   if (!chart) return "";
-  const { series, asOf } = chart;
-  const allPts = series.flatMap(s => s.pts);
+  const { series, axisDates, asOf } = chart;
+  // Points are positioned by their actual trading date against the shared
+  // axis (built from the benchmarks’ own window), not by array index —
+  // this lets the ticker’s line have fewer points than the benchmarks
+  // (e.g. a recent IPO) and still land correctly, right-aligned on "today",
+  // without needing to shrink or shift the benchmark lines to match.
+  const dateIndex = new Map(axisDates.map((d, i) => [d, i]));
+  const n = axisDates.length;
+  const allPts = series.flatMap(s => s.pts.map(p => p.pct));
   const minY = Math.min(...allPts, 0), maxY = Math.max(...allPts, 0);
   const padY = (maxY - minY) * 0.12 || 1;
   const yLo = minY - padY, yHi = maxY + padY;
   const W = 640, H = 220, padL = 40, padR = 8, padT = 12, padB = 10;
   const plotW = W - padL - padR, plotH = H - padT - padB;
-  const n = series[0].pts.length;
   const xFor = i => padL + (n === 1 ? 0 : (i / (n - 1))) * plotW;
   const yFor = v => padT + (1 - (v - yLo) / (yHi - yLo)) * plotH;
   const zeroY = yFor(0);
-  const pathFor = s => s.pts.map((v, i) => (i === 0 ? "M" : "L") + xFor(i).toFixed(1) + "," + yFor(v).toFixed(1)).join(" ");
+  const pathFor = s => {
+    let d = "", started = false;
+    for (const p of s.pts){
+      const idx = dateIndex.has(p.d) ? dateIndex.get(p.d) : null;
+      if (idx == null) continue; // date not on the shared axis (rare) — skip rather than misplace
+      d += (started ? "L" : "M") + xFor(idx).toFixed(1) + "," + yFor(p.pct).toFixed(1) + " ";
+      started = true;
+    }
+    return d.trim();
+  };
   const lines = series.map((s, i) =>
     '<path d="' + pathFor(s) + '" fill="none" stroke="' + s.color + '" stroke-width="' + (i === 0 ? 2.5 : 1.5) + '" />'
   ).join("");
   const yLabel = v => '<text x="4" y="' + (yFor(v) + 3).toFixed(1) + '" font-size="9" fill="var(--ink-faint)" font-family="var(--mono)">' + (v >= 0 ? "+" : "") + v.toFixed(0) + "%</text>";
-  const legend = series.map(s =>
-    '<span style="display:inline-flex;align-items:center;gap:4px;margin-right:12px;margin-bottom:4px;">'
+  const legend = series.map(s => {
+    const lastPct = s.pts.length ? s.pts[s.pts.length - 1].pct : null;
+    return '<span style="display:inline-flex;align-items:center;gap:4px;margin-right:12px;margin-bottom:4px;">'
     + '<span style="width:9px;height:9px;border-radius:2px;background:' + s.color + ';display:inline-block;flex-shrink:0;"></span>'
-    + esc(s.label) + ' <span style="color:' + (s.pts[s.pts.length-1]>=0?"var(--teal)":"var(--rust)") + ';font-weight:600;">'
-    + (s.pts[s.pts.length-1]>=0?"+":"") + s.pts[s.pts.length-1].toFixed(1) + '%</span></span>'
-  ).join("");
+    + esc(s.label) + (lastPct == null ? '' : ' <span style="color:' + (lastPct>=0?"var(--teal)":"var(--rust)") + ';font-weight:600;">'
+    + (lastPct>=0?"+":"") + lastPct.toFixed(1) + '%</span>') + '</span>';
+  }).join("");
   return '<div class="group-label">3-MONTH PERFORMANCE VS. BENCHMARKS' + (asOf ? ' \u00b7 THROUGH ' + esc(fmtDate(asOf) || asOf) : '') + '</div>'
     + '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;display:block;background:var(--paper);border:1px solid var(--line);border-radius:8px;">'
     + '<line x1="' + padL + '" y1="' + zeroY.toFixed(1) + '" x2="' + (W - padR) + '" y2="' + zeroY.toFixed(1) + '" stroke="var(--line)" stroke-dasharray="3,3" />'
@@ -1026,8 +1039,12 @@ function render(){
     + (state.search.error ? '<div class="note warn">' + esc(state.search.error) + '</div>' : '')
     + (sr && sr.length
       ? '<div class="group-label">' + sr.length + (sr.length === 1 ? ' MATCH' : ' MATCHES') + '</div>'
-        + '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>NAME</th><th>IN</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
-        + sr.map(r =>
+        + '<div class="gwrap"><table class="gtable"><thead><tr>'
+          + sortableTh("search","t","TICKER") + sortableTh("search","n","NAME") + '<th>IN</th>'
+          + sortableTh("search","day","TODAY") + sortableTh("search","w","5D") + sortableTh("search","m1","1M")
+          + sortableTh("search","m3","3M") + sortableTh("search","m6","6M") + sortableTh("search","ytd","YTD") + sortableTh("search","y1","1Y")
+          + '</tr></thead><tbody>'
+        + sortRows(sr, state.sort.search.key, state.sort.search.dir).map(r =>
             '<tr><td>' + esc(r.t) + '</td>'
             + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.n) + '</td>'
             + '<td style="text-align:left;color:var(--ink-faint);font-size:9.5px;">' + esc(r.inLists.join(', ') || '\u2014') + '</td>'
