@@ -40,9 +40,15 @@ async function historyYahoo(t) {
   const r = j?.chart?.result?.[0];
   const ts = r?.timestamp || [];
   const closes = r?.indicators?.quote?.[0]?.close || [];
+  // Prefer the dividend/split-adjusted close so returns reflect total
+  // return the same way Yahoo Finance's own site computes its trailing
+  // return figures (verified against a live discrepancy: using raw close
+  // understated/overstated returns vs. Yahoo's displayed numbers for a
+  // dividend-paying ETF). Falls back to raw close if adjclose is absent.
+  const adjCloses = r?.indicators?.adjclose?.[0]?.adjclose || [];
   const out = [];
   for (let i = 0; i < ts.length; i++) {
-    const c = closes[i];
+    const c = (adjCloses[i] != null && Number.isFinite(adjCloses[i])) ? adjCloses[i] : closes[i];
     if (c != null && Number.isFinite(c)) {
       out.push({ d: new Date(ts[i] * 1000).toISOString().slice(0, 10), c });
     }
