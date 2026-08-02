@@ -9,7 +9,7 @@ const UNIQUE_TICKERS = [
   "EIS","EWS","EWH","EDEN","EFNL","EIRL","ENOR","ENZL","EWY","EWZ","EWW","EWT",
   "EZA","INDA","MCHI","FXI","THD","TUR","EPOL","ECH","EPU","EIDO","EPHE","ICOL",
   "EWM","KSA","QAT","UAE",
-  "XLK","XLF","XLE","XLV","XLY","XLP","XLI","XLU","XLB","XLRE",
+  "XLK","XLF","XLE","XLV","XLY","XLP","XLI","XLU","XLB","XLRE","XLC",
   "SCHB","SCHX","SCHG","SCHV","SCHM","SCHA","SCHH","SCHF","SCHC","SCHE","SCHP","SCHO","SCHR",
   "VTI","VV","VUG","VTV","VO","VB","VNQ","VEA","VSS","VWO",
   "IWV","IVV","IVW","IVE","IJH","IJR","IYR","EFA","SCZ","EEM","TIP","SHY","IEI",
