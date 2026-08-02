@@ -137,6 +137,7 @@ const COUNTRY_ETFS = [
   {t:"EWJ",n:"Japan",grp:"Developed"},{t:"EWA",n:"Australia",grp:"Developed"},
 
   {t:"EWC",n:"Canada",grp:"Developed"},{t:"EWG",n:"Germany",grp:"Developed"},
+
   {t:"EWQ",n:"France",grp:"Developed"},{t:"EWI",n:"Italy",grp:"Developed"},
   {t:"EWL",n:"Switzerland",grp:"Developed"},{t:"EWN",n:"Netherlands",grp:"Developed"},
   {t:"EWO",n:"Austria",grp:"Developed"},{t:"EWK",n:"Belgium",grp:"Developed"},
@@ -163,8 +164,7 @@ const SECTOR_ETFS = [
   {t:"XLK",n:"Technology"},{t:"XLF",n:"Financials"},{t:"XLE",n:"Energy"},
   {t:"XLV",n:"Health Care"},{t:"XLY",n:"Consumer Discretionary"},{t:"XLP",n:"Consumer Staples"},
   {t:"XLI",n:"Industrials"},{t:"XLU",n:"Utilities"},{t:"XLB",n:"Materials"},{t:"XLRE",n:"Real Estate"},
-  {t:"QQQ",n:"Nasdaq-100"},{t:"TOPT",n:"iShares Top 20 US Stocks"}
-
+  {t:"XLC",n:"Communication Services"} // completes all 11 GICS sectors
 ];
 
 const FAMILIES = ["Schwab","Vanguard","iShares"];
@@ -192,7 +192,10 @@ const ALL_TICKERS = [
   ...SECTOR_ETFS.map(e=>({t:e.t,n:e.n,origin:"sector"})),
   ...FAMILIES.flatMap(f=>familyList(f).map(e=>({t:e.t,n:e.n+" ("+f+")",origin:"foundation"}))),
   {t:"SCHD",n:"US Dividend Equity (Schwab)",origin:"foundation"}, // shown under the "ETFs" filter alongside the core family funds
-  {t:"VOO",n:"S&P 500 (Vanguard)",origin:"foundation"} // shown under the "ETFs" filter alongside the core family funds
+  {t:"VOO",n:"S&P 500 (Vanguard)",origin:"foundation"}, // shown under the "ETFs" filter alongside the core family funds
+  {t:"VXUS",n:"Total International Stock (Vanguard)",origin:"foundation"}, // shown under the "ETFs" filter alongside the core family funds
+  {t:"QQQ",n:"Nasdaq-100",origin:"foundation"}, // broad-market index tracker, not a single sector — moved out of SECTOR_ETFS
+  {t:"TOPT",n:"iShares Top 20 US Stocks",origin:"foundation"} // broad-market index tracker, not a single sector — moved out of SECTOR_ETFS
 ];
 const UNIQUE_TICKERS = [...new Set(ALL_TICKERS.map(r=>r.t))];
 
