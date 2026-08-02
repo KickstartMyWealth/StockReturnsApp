@@ -13,7 +13,7 @@ const UNIQUE_TICKERS = [
   "SCHB","SCHX","SCHG","SCHV","SCHM","SCHA","SCHH","SCHF","SCHC","SCHE","SCHP","SCHO","SCHR",
   "VTI","VV","VUG","VTV","VO","VB","VNQ","VEA","VSS","VWO",
   "IWV","IVV","IVW","IVE","IJH","IJR","IYR","EFA","SCZ","EEM","TIP","SHY","IEI",
-  "QQQ","TOPT","SCHD","VOO"
+  "QQQ","TOPT","SCHD","VOO","VXUS"
 ];
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36";
@@ -300,3 +300,4 @@ async function main() {
 }
 
 main();
+
