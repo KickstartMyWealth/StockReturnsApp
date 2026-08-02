@@ -191,7 +191,8 @@ const ALL_TICKERS = [
   ...COUNTRY_ETFS.map(e=>({t:e.t,n:e.n,origin:"country"})),
   ...SECTOR_ETFS.map(e=>({t:e.t,n:e.n,origin:"sector"})),
   ...FAMILIES.flatMap(f=>familyList(f).map(e=>({t:e.t,n:e.n+" ("+f+")",origin:"foundation"}))),
-  {t:"SCHD",n:"US Dividend Equity (Schwab)",origin:"foundation"} // shown under the "ETFs" filter alongside the core family funds
+  {t:"SCHD",n:"US Dividend Equity (Schwab)",origin:"foundation"}, // shown under the "ETFs" filter alongside the core family funds
+  {t:"VOO",n:"S&P 500 (Vanguard)",origin:"foundation"} // shown under the "ETFs" filter alongside the core family funds
 ];
 const UNIQUE_TICKERS = [...new Set(ALL_TICKERS.map(r=>r.t))];
 
