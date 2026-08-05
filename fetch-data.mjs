@@ -100,6 +100,35 @@ function computeReturns(hist) {
   };
 }
 
+// ---- 2-Month Returns for screener-derived lists ----
+// stockanalysis.com's screener API (used for the Club/Stars/Green/Red/
+// Month1/ETF1Y lists) doesn't actually serve a 2-month field — confirmed
+// live: requesting "ch2m" is accepted without error but returns null for
+// every ticker. So for these lists, 2M is computed the same way as the
+// main UNIQUE_TICKERS loop above (full Yahoo daily history), but only for
+// the much smaller set of tickers that actually made each list — fetching
+// full history for the whole market just for this one field isn't practical.
+async function attach2MReturns(lists) {
+  const tickers = [...new Set(lists.flatMap(rows => (rows || []).map(r => r.t)))];
+  const twoMonth = {};
+  const queue = [...tickers];
+  await Promise.all(Array.from({ length: 5 }, async () => {
+    while (queue.length) {
+      const t = queue.shift();
+      try {
+        const h = await history(t);
+        const r = h ? computeReturns(h) : null;
+        if (r) twoMonth[t] = r["2M"];
+      } catch {}
+      await new Promise(res => setTimeout(res, 150)); // be polite
+    }
+  }));
+  for (const rows of lists) {
+    if (!rows) continue;
+    for (const row of rows) row.m2 = twoMonth[row.t] ?? null;
+  }
+}
+
 async function main() {
   const returns = {};
   let failed = 0;
@@ -151,6 +180,7 @@ async function main() {
     const sameDay = prev.day === todayET; // rerun guard: don't double-increment
     // Cumulative, never resets: a star is added on any day a stock sets a new
     // 52-week high, up to 5 total. Missed days simply don't add a star; they
+
     // don't remove one. "since" tracks the most recent date a star was added.
 
     const newStars = {}, newHighs = {}, newSince = {};
@@ -224,6 +254,10 @@ async function main() {
       }));
     if (!oneMonthGainers.length) oneMonthGainers = null;
 
+    // Attach real 2-month returns before building multiListed, so its
+    // spread-copied rows (below) inherit m2 along with everything else.
+    await attach2MReturns([club, starGainers, allGreen, allRed, oneMonthGainers]);
+
     // ---- Tickers Listed Above Multiple Times: appears in 2+ of the four
     // bullish lists (Club, Star Gainers, All Green, 1 Month Gainers).
     // Shorts/All Red is intentionally excluded — it's a bearish list, not
@@ -274,6 +308,7 @@ async function main() {
       .sort((a, b) => b.y1 - a.y1)
       .map(({ volume, ...r }) => ({ ...r, price: +r.price.toFixed(2), y1: +r.y1.toFixed(2), day: Number.isFinite(r.day) ? +r.day.toFixed(2) : null }));
     if (rows.length) etf1YClub = rows;
+    if (etf1YClub) await attach2MReturns([etf1YClub]);
   } catch (e) {
     console.warn("ETF market screen failed:", e.message);
   }
@@ -300,4 +335,3 @@ async function main() {
 }
 
 main();
-
