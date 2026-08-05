@@ -100,6 +100,8 @@
   .gtable td:first-child { text-align:left; color:var(--ink); font-size:12px; letter-spacing:0.5px; }
   .gtable td.pos { color:var(--teal); }
   .gtable td.neg { color:var(--rust); }
+  .gtable td.tick-pos { background:rgba(46,92,86,0.14); color:var(--teal); font-weight:700; border-radius:6px; }
+  .gtable td.tick-neg { background:rgba(140,74,58,0.14); color:var(--rust); font-weight:700; border-radius:6px; }
 
   .spacer { height:24px; }
 </style>
@@ -145,6 +147,7 @@ const COUNTRY_ETFS = [
 
   {t:"EWD",n:"Sweden",grp:"Developed"},{t:"EWP",n:"Spain",grp:"Developed"},
   {t:"EWU",n:"United Kingdom",grp:"Developed"},{t:"EIS",n:"Israel",grp:"Developed"},
+
   {t:"EWS",n:"Singapore",grp:"Developed"},{t:"EWH",n:"Hong Kong",grp:"Developed"},
 
   {t:"EDEN",n:"Denmark",grp:"Developed"},{t:"EFNL",n:"Finland",grp:"Developed"},
@@ -723,8 +726,8 @@ function pctTd(v, decimals){
 // from the per-column coloring which only reflects each period in isolation.
 function tickerClass(w, m1, m2){
   if (w == null || m1 == null || m2 == null) return '';
-  if (w > 0 && m1 > 0 && m2 > 0) return ' class="pos"';
-  if (w < 0 && m1 < 0 && m2 < 0) return ' class="neg"';
+  if (w > 0 && m1 > 0 && m2 > 0) return ' class="tick-pos"';
+  if (w < 0 && m1 < 0 && m2 < 0) return ' class="tick-neg"';
   return '';
 }
 
