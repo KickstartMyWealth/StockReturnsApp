@@ -142,6 +142,7 @@ const COUNTRY_ETFS = [
   {t:"EWL",n:"Switzerland",grp:"Developed"},{t:"EWN",n:"Netherlands",grp:"Developed"},
 
   {t:"EWO",n:"Austria",grp:"Developed"},{t:"EWK",n:"Belgium",grp:"Developed"},
+
   {t:"EWD",n:"Sweden",grp:"Developed"},{t:"EWP",n:"Spain",grp:"Developed"},
   {t:"EWU",n:"United Kingdom",grp:"Developed"},{t:"EIS",n:"Israel",grp:"Developed"},
   {t:"EWS",n:"Singapore",grp:"Developed"},{t:"EWH",n:"Hong Kong",grp:"Developed"},
@@ -643,13 +644,14 @@ async function performSearch(){
         return {
           t, n, price: batch.price ?? null,
           day: batch["1D"] ?? null, w: batch["5D"] ?? null, m1: batch["1M"] ?? null,
-          m3: batch["3M"] ?? null, m6: batch["6M"] ?? null, ytd: batch["YTD"] ?? null, y1: batch["1Y"] ?? null,
+          m3: batch["3M"] ?? null, m2: batch["2M"] ?? null, m6: batch["6M"] ?? null, ytd: batch["YTD"] ?? null, y1: batch["1Y"] ?? null,
           inLists: findListings(t)
         };
       }
       return {
         t, n, price: num(v.price),
         day: num(v.change), w: num(v.ch1w), m1: num(v.ch1m), m3: num(v.ch3m),
+        m2: null, // live lookup source doesn't serve a 2-month field; batch-tracked tickers above do
         m6: num(v.ch6m), ytd: num(v.chYTD), y1: num(v.ch1y),
         inLists: findListings(t)
       };
@@ -869,7 +871,7 @@ function render(){
     .map(r => ({
       t: r.t, n: r.n,
       day: retField(r.t, "1D"), w: retField(r.t, "5D"), m1: retField(r.t, "1M"),
-      m3: retField(r.t, "3M"), m6: retField(r.t, "6M"), ytd: retField(r.t, "YTD"), y1: retField(r.t, "1Y")
+      m3: retField(r.t, "3M"), m2: retField(r.t, "2M"), m6: retField(r.t, "6M"), ytd: retField(r.t, "YTD"), y1: retField(r.t, "1Y")
     }));
   const allBody =
     '<div class="group-label">' + freshnessLabel() + '</div>'
@@ -878,12 +880,12 @@ function render(){
     + '<div class="gwrap"><table class="gtable"><thead><tr>'
       + sortableTh("all","t","TICKER") + sortableTh("all","n","NAME")
       + sortableTh("all","day","TODAY") + sortableTh("all","w","5D") + sortableTh("all","m1","1M")
-      + sortableTh("all","m3","3M") + sortableTh("all","m6","6M") + sortableTh("all","ytd","YTD") + sortableTh("all","y1","1Y")
+      + sortableTh("all","m3","3M") + sortableTh("all","m2","2M") + sortableTh("all","m6","6M") + sortableTh("all","ytd","YTD") + sortableTh("all","y1","1Y")
       + '</tr></thead><tbody>'
     + sortRows(baseRows, state.sort.all.key, state.sort.all.dir).map(r =>
         '<tr><td>' + esc(r.t) + '</td>'
         + '<td title="' + esc(r.n) + '" style="text-align:left;color:var(--ink-faint);font-size:10.5px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(r.n) + '</td>'
-        + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
+        + [r.day, r.w, r.m1, r.m3, r.m2, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
         + '</tr>').join('')
     + '</tbody></table></div>';
 
@@ -897,12 +899,12 @@ function render(){
       ? '<div class="gwrap"><table class="gtable"><thead><tr>'
         + sortableTh("etf1y","t","TICKER") + sortableTh("etf1y","n","NAME")
         + sortableTh("etf1y","day","TODAY") + sortableTh("etf1y","w","5D") + sortableTh("etf1y","m1","1M")
-        + sortableTh("etf1y","m3","3M") + sortableTh("etf1y","m6","6M") + sortableTh("etf1y","ytd","YTD") + sortableTh("etf1y","y1","1Y")
+        + sortableTh("etf1y","m3","3M") + sortableTh("etf1y","m2","2M") + sortableTh("etf1y","m6","6M") + sortableTh("etf1y","ytd","YTD") + sortableTh("etf1y","y1","1Y")
         + '</tr></thead><tbody>'
         + sortRows(etf1yRows, state.sort.etf1y.key, state.sort.etf1y.dir).map(r =>
             '<tr><td>' + esc(r.t) + '</td>'
             + '<td title="' + esc(r.n) + '" style="text-align:left;color:var(--ink-faint);font-size:10.5px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(r.n) + '</td>'
-            + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
+            + [r.day, r.w, r.m1, r.m3, r.m2, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
             + '</tr>').join('')
         + '</tbody></table></div>'
       : '');
@@ -920,12 +922,12 @@ function render(){
     + '<div class="gwrap"><table class="gtable"><thead><tr>'
       + sortableTh("club","t","TICKER") + sortableTh("club","sector","SECTOR")
       + sortableTh("club","day","TODAY") + sortableTh("club","w","5D") + sortableTh("club","m1","1M")
-      + sortableTh("club","m3","3M") + sortableTh("club","m6","6M") + sortableTh("club","ytd","YTD") + sortableTh("club","y1","1Y")
+      + sortableTh("club","m3","3M") + sortableTh("club","m2","2M") + sortableTh("club","m6","6M") + sortableTh("club","ytd","YTD") + sortableTh("club","y1","1Y")
       + '</tr></thead><tbody>'
     + sortRows(clubRows, state.sort.club.key, state.sort.club.dir).map(r =>
         '<tr><td>' + esc(r.t) + '</td>'
         + '<td title="' + esc(r.sector || '\u2014') + '" style="text-align:left;color:var(--ink-faint);font-size:10.5px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(r.sector || '\u2014') + '</td>'
-        + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
+        + [r.day, r.w, r.m1, r.m3, r.m2, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
         + '</tr>').join('')
     + '</tbody></table></div>';
 
@@ -938,14 +940,14 @@ function render(){
     + '<div class="gwrap"><table class="gtable"><thead><tr>'
       + sortableTh("stars","t","TICKER") + sortableTh("stars","sector","SECTOR")
       + sortableTh("stars","stars","STARS") + sortableTh("stars","day","TODAY") + sortableTh("stars","w","5D")
-      + sortableTh("stars","m1","1M") + sortableTh("stars","m3","3M") + sortableTh("stars","m6","6M")
+      + sortableTh("stars","m1","1M") + sortableTh("stars","m3","3M") + sortableTh("stars","m2","2M") + sortableTh("stars","m6","6M")
       + sortableTh("stars","ytd","YTD") + sortableTh("stars","y1","1Y")
       + '</tr></thead><tbody>'
     + sortRows(starRows, state.sort.stars.key, state.sort.stars.dir).map(r =>
         '<tr><td>' + esc(r.t) + '</td>'
         + '<td title="' + esc(r.sector || '\u2014') + '" style="text-align:left;color:var(--ink-faint);font-size:10.5px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(r.sector || '\u2014') + '</td>'
         + '<td>' + "\u2605".repeat(Math.min(r.stars||1,5)) + (r.since?' \u00b7 '+fmtDate(r.since):'') + '</td>'
-        + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
+        + [r.day, r.w, r.m1, r.m3, r.m2, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
         + '</tr>').join('')
     + '</tbody></table></div>';
   const greenRows = state.allGreen || [];
@@ -958,12 +960,12 @@ function render(){
       ? '<div class="gwrap"><table class="gtable"><thead><tr>'
         + sortableTh("green","t","TICKER") + sortableTh("green","sector","SECTOR")
         + sortableTh("green","day","TODAY") + sortableTh("green","w","5D") + sortableTh("green","m1","1M")
-        + sortableTh("green","m3","3M") + sortableTh("green","m6","6M") + sortableTh("green","ytd","YTD") + sortableTh("green","y1","1Y")
+        + sortableTh("green","m3","3M") + sortableTh("green","m2","2M") + sortableTh("green","m6","6M") + sortableTh("green","ytd","YTD") + sortableTh("green","y1","1Y")
         + '</tr></thead><tbody>'
         + sortRows(greenRows, state.sort.green.key, state.sort.green.dir).map(r =>
             '<tr><td>' + esc(r.t) + '</td>'
             + '<td title="' + esc(r.sector || '\u2014') + '" style="text-align:left;color:var(--ink-faint);font-size:10.5px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(r.sector || '\u2014') + '</td>'
-            + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
+            + [r.day, r.w, r.m1, r.m3, r.m2, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
             + '</tr>').join('')
         + '</tbody></table></div>'
       : '');
@@ -978,12 +980,12 @@ function render(){
       ? '<div class="gwrap"><table class="gtable"><thead><tr>'
         + sortableTh("red","t","TICKER") + sortableTh("red","sector","SECTOR")
         + sortableTh("red","day","TODAY") + sortableTh("red","w","5D") + sortableTh("red","m1","1M")
-        + sortableTh("red","m3","3M") + sortableTh("red","m6","6M") + sortableTh("red","ytd","YTD") + sortableTh("red","y1","1Y")
+        + sortableTh("red","m3","3M") + sortableTh("red","m2","2M") + sortableTh("red","m6","6M") + sortableTh("red","ytd","YTD") + sortableTh("red","y1","1Y")
         + '</tr></thead><tbody>'
         + sortRows(redRows, state.sort.red.key, state.sort.red.dir).map(r =>
             '<tr><td>' + esc(r.t) + '</td>'
             + '<td title="' + esc(r.sector || '\u2014') + '" style="text-align:left;color:var(--ink-faint);font-size:10.5px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(r.sector || '\u2014') + '</td>'
-            + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
+            + [r.day, r.w, r.m1, r.m3, r.m2, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
             + '</tr>').join('')
         + '</tbody></table></div>'
       : '');
@@ -998,12 +1000,12 @@ function render(){
       ? '<div class="gwrap"><table class="gtable"><thead><tr>'
         + sortableTh("month1","t","TICKER") + sortableTh("month1","sector","SECTOR")
         + sortableTh("month1","day","TODAY") + sortableTh("month1","w","5D") + sortableTh("month1","m1","1M")
-        + sortableTh("month1","m3","3M") + sortableTh("month1","m6","6M") + sortableTh("month1","ytd","YTD") + sortableTh("month1","y1","1Y")
+        + sortableTh("month1","m3","3M") + sortableTh("month1","m2","2M") + sortableTh("month1","m6","6M") + sortableTh("month1","ytd","YTD") + sortableTh("month1","y1","1Y")
         + '</tr></thead><tbody>'
         + sortRows(month1Rows, state.sort.month1.key, state.sort.month1.dir).map(r =>
             '<tr><td>' + esc(r.t) + '</td>'
             + '<td title="' + esc(r.sector || '\u2014') + '" style="text-align:left;color:var(--ink-faint);font-size:10.5px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(r.sector || '\u2014') + '</td>'
-            + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
+            + [r.day, r.w, r.m1, r.m3, r.m2, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
             + '</tr>').join('')
         + '</tbody></table></div>'
       : '');
@@ -1018,14 +1020,14 @@ function render(){
       ? '<div class="gwrap"><table class="gtable"><thead><tr>'
         + sortableTh("multi","t","TICKER") + sortableTh("multi","sector","SECTOR")
         + sortableTh("multi","count","IN") + sortableTh("multi","day","TODAY") + sortableTh("multi","w","5D")
-        + sortableTh("multi","m1","1M") + sortableTh("multi","m3","3M") + sortableTh("multi","m6","6M")
+        + sortableTh("multi","m1","1M") + sortableTh("multi","m3","3M") + sortableTh("multi","m2","2M") + sortableTh("multi","m6","6M")
         + sortableTh("multi","ytd","YTD") + sortableTh("multi","y1","1Y")
         + '</tr></thead><tbody>'
         + sortRows(multiRows, state.sort.multi.key, state.sort.multi.dir).map(r =>
             '<tr><td>' + esc(r.t) + '</td>'
             + '<td title="' + esc(r.sector || '\u2014') + '" style="text-align:left;color:var(--ink-faint);font-size:10.5px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(r.sector || '\u2014') + '</td>'
             + '<td>' + esc(r.inLists || '') + '</td>'
-            + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
+            + [r.day, r.w, r.m1, r.m3, r.m2, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
             + '</tr>').join('')
         + '</tbody></table></div>'
       : '');
@@ -1039,11 +1041,11 @@ function render(){
         const rows = familyList(activeFamily).filter(r => r.group === g);
         if (!rows.length) return '';
         return '<div class="group-label">' + esc(g.toUpperCase()) + '</div>'
-          + '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>NAME</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
+          + '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>NAME</th><th>TODAY</th><th>5D</th><th>1M</th><th>3M</th><th>2M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
           + rows.map(r =>
               '<tr><td>' + esc(r.t) + '</td>'
               + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.n) + '</td>'
-              + ["1D","5D","1M","3M","6M","YTD","1Y"].map(k => pctTd(retField(r.t, k), 1)).join('')
+              + ["1D","5D","1M","3M","2M","6M","YTD","1Y"].map(k => pctTd(retField(r.t, k), 1)).join('')
               + '</tr>').join('')
           + '</tbody></table></div>';
       }).join('');
@@ -1065,14 +1067,14 @@ function render(){
           + sortableTh("search","t","TICKER") + sortableTh("search","n","NAME") + '<th>IN</th>'
           + sortableTh("search","price","PRICE")
           + sortableTh("search","day","TODAY") + sortableTh("search","w","5D") + sortableTh("search","m1","1M")
-          + sortableTh("search","m3","3M") + sortableTh("search","m6","6M") + sortableTh("search","ytd","YTD") + sortableTh("search","y1","1Y")
+          + sortableTh("search","m3","3M") + sortableTh("search","m2","2M") + sortableTh("search","m6","6M") + sortableTh("search","ytd","YTD") + sortableTh("search","y1","1Y")
           + '</tr></thead><tbody>'
         + sortRows(sr, state.sort.search.key, state.sort.search.dir).map(r =>
             '<tr><td>' + esc(r.t) + '</td>'
             + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.n) + '</td>'
             + '<td style="text-align:left;color:var(--ink-faint);font-size:9.5px;">' + esc(r.inLists.join(', ') || '\u2014') + '</td>'
             + '<td style="color:var(--ink-faint);">' + (r.price != null ? '$' + r.price.toFixed(2) : '\u2014') + '</td>'
-            + [r.day, r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
+            + [r.day, r.w, r.m1, r.m3, r.m2, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
             + '</tr>').join('')
         + '</tbody></table></div>'
       : '')
