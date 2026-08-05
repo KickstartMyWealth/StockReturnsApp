@@ -146,6 +146,7 @@ const COUNTRY_ETFS = [
   {t:"EWD",n:"Sweden",grp:"Developed"},{t:"EWP",n:"Spain",grp:"Developed"},
   {t:"EWU",n:"United Kingdom",grp:"Developed"},{t:"EIS",n:"Israel",grp:"Developed"},
   {t:"EWS",n:"Singapore",grp:"Developed"},{t:"EWH",n:"Hong Kong",grp:"Developed"},
+
   {t:"EDEN",n:"Denmark",grp:"Developed"},{t:"EFNL",n:"Finland",grp:"Developed"},
   {t:"EIRL",n:"Ireland",grp:"Developed"},{t:"ENOR",n:"Norway",grp:"Developed"},
   {t:"ENZL",n:"New Zealand",grp:"Developed"},{t:"EWY",n:"South Korea",grp:"Developed"},
@@ -200,7 +201,11 @@ const ALL_TICKERS = [
   {t:"QQQ",n:"Nasdaq-100",origin:"foundation"}, // broad-market index tracker, not a single sector — moved out of SECTOR_ETFS
   {t:"TOPT",n:"iShares Top 20 US Stocks",origin:"foundation"} // broad-market index tracker, not a single sector — moved out of SECTOR_ETFS
 ];
-const UNIQUE_TICKERS = [...new Set(ALL_TICKERS.map(r=>r.t))];
+// SPY/IWM/DIA are fetched purely to power the Search section's benchmark
+// rows below (QQQ is already tracked above as a Foundation ETF) — added
+// directly here rather than to ALL_TICKERS so they don't also appear as
+// rows in Base ETFs/Sectors, which isn't their purpose.
+const UNIQUE_TICKERS = [...new Set([...ALL_TICKERS.map(r=>r.t), "SPY", "IWM", "DIA"])];
 
 // Snapshot fallback for the 100%+ Club (S&P 500, mid-July 2026).
 const CLUB_FALLBACK = [
@@ -1051,6 +1056,21 @@ function render(){
       }).join('');
 
   const sr = state.search.result;
+  // Fixed reference set shown below the search results so any searched
+  // ticker can be compared directly against these four major indices —
+  // same tickers/labels as the chart's benchmark lines above, sourced from
+  // this app's own tracked-ticker data (state.returns) rather than a
+  // second live lookup, for the same reason Search prefers batch data.
+  const searchBenchmarks = BENCHMARKS.map(b => {
+    const batch = state.returns[b.key];
+    return {
+      t: b.key, n: b.label, price: batch?.price ?? null,
+      day: batch?.["1D"] ?? null, w: batch?.["5D"] ?? null, m1: batch?.["1M"] ?? null,
+      m2: batch?.["2M"] ?? null, m3: batch?.["3M"] ?? null, m6: batch?.["6M"] ?? null,
+      ytd: batch?.["YTD"] ?? null, y1: batch?.["1Y"] ?? null,
+      inLists: findListings(b.key)
+    };
+  });
   const searchBody =
     '<div class="group-label">LIVE SEARCH</div>'
     + '<div class="note">Search any US-listed stock or ETF by ticker or company name. Companies with multiple share classes (e.g. Alphabet\u2019s GOOGL/GOOG) return every class.</div>'
@@ -1070,6 +1090,14 @@ function render(){
           + sortableTh("search","m2","2M") + sortableTh("search","m3","3M") + sortableTh("search","m6","6M") + sortableTh("search","ytd","YTD") + sortableTh("search","y1","1Y")
           + '</tr></thead><tbody>'
         + sortRows(sr, state.sort.search.key, state.sort.search.dir).map(r =>
+            '<tr><td>' + esc(r.t) + '</td>'
+            + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.n) + '</td>'
+            + '<td style="text-align:left;color:var(--ink-faint);font-size:9.5px;">' + esc(r.inLists.join(', ') || '\u2014') + '</td>'
+            + '<td style="color:var(--ink-faint);">' + (r.price != null ? '$' + r.price.toFixed(2) : '\u2014') + '</td>'
+            + [r.day, r.w, r.m1, r.m2, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
+            + '</tr>').join('')
+        + '<tr><td colspan="12" style="text-align:left;color:var(--teal);font-family:var(--mono);font-size:9px;letter-spacing:1.5px;padding-top:14px;border-top:2px solid var(--line);">BENCHMARKS</td></tr>'
+        + searchBenchmarks.map(r =>
             '<tr><td>' + esc(r.t) + '</td>'
             + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.n) + '</td>'
             + '<td style="text-align:left;color:var(--ink-faint);font-size:9.5px;">' + esc(r.inLists.join(', ') || '\u2014') + '</td>'
