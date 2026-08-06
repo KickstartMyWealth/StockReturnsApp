@@ -689,18 +689,27 @@ async function performSearch(){
     render();
   }
 }
-// "YYYY-MM-DD" -> "MM/DD/YY"
+const MONTH_ABBR = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+// "YYYY-MM-DD" -> "Mon DD, YY" (e.g. "2026-08-05" -> "Aug 05, 26"). A 3-letter
+// month avoids the DD/MM vs MM/DD ambiguity of an all-numeric date — e.g.
+// "05/08/26" could be misread as either May 8th or August 5th.
 function fmtDate(d){
   if (!d) return null;
   const m = String(d).match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (!m) return null;
-  return m[2] + "/" + m[3] + "/" + m[1].slice(2);
+  const mon = MONTH_ABBR[parseInt(m[2],10)-1];
+  if (!mon) return null;
+  return mon + " " + m[3] + ", " + m[1].slice(2);
 }
-// Uniform freshness label for every batch-refreshed section: "UPDATED EVERY 30 MIN AS OF DD/MM/YY"
+// Same "Mon DD, YY" format, from a JS Date object rather than a "YYYY-MM-DD"
+// string — used for state.fetchedAt, which is stored as a Date.
+function fmtDateObj(dt){
+  if (!dt) return null;
+  return MONTH_ABBR[dt.getMonth()] + " " + String(dt.getDate()).padStart(2,"0") + ", " + String(dt.getFullYear()).slice(-2);
+}
+// Uniform freshness label for every batch-refreshed section: "UPDATED EVERY 30 MIN AS OF Mon DD, YY"
 function freshnessLabel(){
-  const m = String(state.dataAsOf || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (!m) return "UPDATED EVERY 30 MIN AS OF \u2014";
-  return "UPDATED EVERY 30 MIN AS OF " + m[3] + "/" + m[2] + "/" + m[1].slice(2);
+  return "UPDATED EVERY 30 MIN AS OF " + (fmtDate(state.dataAsOf) || "\u2014");
 }
 
 /* ================================================================ *
@@ -852,11 +861,12 @@ function render(){
     f.textContent = "Fetching latest prices…";
     f.classList.remove("warn");
   } else if (state.source){
-    const when = state.fetchedAt ? state.fetchedAt.toLocaleString([], {dateStyle:"medium", timeStyle:"short"}) : "";
+    const fetchedTime = state.fetchedAt ? state.fetchedAt.toLocaleTimeString([], {timeStyle:"short"}) : "";
+    const when = state.fetchedAt ? fmtDateObj(state.fetchedAt) + ", " + fetchedTime : "";
     f.textContent = state.source === "static"
-      ? "Last run " + (state.fetchedAt ? state.fetchedAt.toLocaleDateString([], {dateStyle:"medium"}) : state.dataAsOf) + " and " + (state.fetchedAt ? state.fetchedAt.toLocaleTimeString([], {timeStyle:"short"}) : "")
+      ? "Last run " + (state.fetchedAt ? fmtDateObj(state.fetchedAt) : (fmtDate(state.dataAsOf) || state.dataAsOf)) + " and " + fetchedTime
       : state.source === "stooq"
-      ? "Market data through " + state.dataAsOf + " (latest free close) · fetched " + when
+      ? "Market data through " + (fmtDate(state.dataAsOf) || state.dataAsOf) + " (latest free close) · fetched " + when
         + (state.partial ? " · " + state.partial + " tickers unavailable" : "")
       : "Latest close via web search · fetched " + when + " · direct feed blocked in this preview";
     f.classList.toggle("warn", state.source === "stooq" && state.partial > 0);
