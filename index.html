@@ -100,8 +100,10 @@
   .gtable td:first-child { text-align:left; color:var(--ink); font-size:12px; letter-spacing:0.5px; }
   .gtable td.pos { color:var(--teal); }
   .gtable td.neg { color:var(--rust); }
-  .gtable td.tick-pos { background:rgba(46,92,86,0.14); color:var(--teal); font-weight:700; border-radius:6px; }
+  .gtable td.tick-pos { background:rgba(22,163,74,0.16); color:#16A34A; font-weight:700; border-radius:6px; }
   .gtable td.tick-neg { background:rgba(140,74,58,0.14); color:var(--rust); font-weight:700; border-radius:6px; }
+  .gtable td.tick-warn { background:rgba(202,138,4,0.16); color:#CA8A04; font-weight:700; border-radius:6px; }
+  .gtable td.tick-trend { background:rgba(46,125,175,0.16); color:#2E7DAF; font-weight:700; border-radius:6px; }
 
   .spacer { height:24px; }
 </style>
@@ -146,6 +148,7 @@ const COUNTRY_ETFS = [
   {t:"EWO",n:"Austria",grp:"Developed"},{t:"EWK",n:"Belgium",grp:"Developed"},
 
   {t:"EWD",n:"Sweden",grp:"Developed"},{t:"EWP",n:"Spain",grp:"Developed"},
+
   {t:"EWU",n:"United Kingdom",grp:"Developed"},{t:"EIS",n:"Israel",grp:"Developed"},
 
   {t:"EWS",n:"Singapore",grp:"Developed"},{t:"EWH",n:"Hong Kong",grp:"Developed"},
@@ -730,13 +733,21 @@ function pctTd(v, decimals){
   return '<td class="'+cls+'">'+(v>=0?"+":"")+v.toFixed(decimals)+'%</td>';
 }
 
-// Highlights the ticker symbol itself green/red when 5D, 1M, and 2M all
-// agree in direction \u2014 a quick "is this now trending?" signal, distinct
-// from the per-column coloring which only reflects each period in isolation.
+// Highlights the ticker symbol itself as a quick "what\u2019s this doing?"
+// signal, distinct from the per-column coloring which only reflects each
+// period in isolation:
+//  - green: 5D, 1M, and 2M all positive \u2014 sustained uptrend
+//  - red: 5D, 1M, and 2M all negative \u2014 sustained downtrend
+//  - yellow: 5D and 1M negative but 2M positive \u2014 recent reversal
+//    downward, turning negative after a positive 2-month run
+//  - light blue: 5D and 1M positive but 2M negative \u2014 recent reversal
+//    upward, turning positive after a negative 2-month run
 function tickerClass(w, m1, m2){
   if (w == null || m1 == null || m2 == null) return '';
   if (w > 0 && m1 > 0 && m2 > 0) return ' class="tick-pos"';
   if (w < 0 && m1 < 0 && m2 < 0) return ' class="tick-neg"';
+  if (w < 0 && m1 < 0 && m2 > 0) return ' class="tick-warn"';
+  if (w > 0 && m1 > 0 && m2 < 0) return ' class="tick-trend"';
   return '';
 }
 
