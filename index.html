@@ -86,10 +86,14 @@
   .pill { font-family:var(--mono); font-size:12px; font-weight:500; padding:8px 14px; border-radius:8px;
     border:1.5px solid var(--line); color:var(--ink-faint); }
   .pill.selected { border-color:var(--gold); background:var(--gold-soft); color:var(--teal); }
-  .pill.selected.mom-pos { border-color:#16A34A; background:rgba(22,163,74,0.16); color:#16A34A; }
-  .pill.selected.mom-trend { border-color:#2E7DAF; background:rgba(46,125,175,0.16); color:#2E7DAF; }
-  .pill.selected.mom-warn { border-color:#CA8A04; background:rgba(202,138,4,0.16); color:#CA8A04; }
-  .pill.selected.mom-neg { border-color:var(--rust); background:rgba(140,74,58,0.14); color:var(--rust); }
+  .pill.mom-pos { border-color:#16A34A; color:#16A34A; }
+  .pill.mom-trend { border-color:#2E7DAF; color:#2E7DAF; }
+  .pill.mom-warn { border-color:#CA8A04; color:#CA8A04; }
+  .pill.mom-neg { border-color:var(--rust); color:var(--rust); }
+  .pill.selected.mom-pos { background:rgba(22,163,74,0.16); }
+  .pill.selected.mom-trend { background:rgba(46,125,175,0.16); }
+  .pill.selected.mom-warn { background:rgba(202,138,4,0.16); }
+  .pill.selected.mom-neg { background:rgba(140,74,58,0.14); }
 
   footer { border-top:1px solid var(--line); background:var(--paper-deep); padding:14px 20px; flex-shrink:0; }
   .apply { width:100%; display:flex; align-items:center; justify-content:center; gap:8px;
@@ -859,7 +863,7 @@ function matchesMomentumFilter(filter, w, m1, m2){
 // the ticker-highlight box each one selects for.
 function momentumPillsHTML(section, selected){
   return '<div class="pills">' + MOMENTUM_FILTERS.map(l =>
-    '<button class="pill'+(l===selected?' selected '+MOMENTUM_FILTER_CLASS[l]:'')+'" data-action="momentumFilter" data-tbl="'+section+'" data-v="'+l+'">'+l+'</button>'
+    '<button class="pill '+MOMENTUM_FILTER_CLASS[l]+(l===selected?' selected':'')+'" data-action="momentumFilter" data-tbl="'+section+'" data-v="'+l+'">'+l+'</button>'
   ).join('') + '</div>';
 }
 
