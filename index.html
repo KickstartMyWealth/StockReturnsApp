@@ -86,6 +86,10 @@
   .pill { font-family:var(--mono); font-size:12px; font-weight:500; padding:8px 14px; border-radius:8px;
     border:1.5px solid var(--line); color:var(--ink-faint); }
   .pill.selected { border-color:var(--gold); background:var(--gold-soft); color:var(--teal); }
+  .pill.selected.mom-pos { border-color:#16A34A; background:rgba(22,163,74,0.16); color:#16A34A; }
+  .pill.selected.mom-trend { border-color:#2E7DAF; background:rgba(46,125,175,0.16); color:#2E7DAF; }
+  .pill.selected.mom-warn { border-color:#CA8A04; background:rgba(202,138,4,0.16); color:#CA8A04; }
+  .pill.selected.mom-neg { border-color:var(--rust); background:rgba(140,74,58,0.14); color:var(--rust); }
 
   footer { border-top:1px solid var(--line); background:var(--paper-deep); padding:14px 20px; flex-shrink:0; }
   .apply { width:100%; display:flex; align-items:center; justify-content:center; gap:8px;
@@ -432,6 +436,7 @@ const state = {
   etf1YClub: null,      // [{t, n, price, day, w, m1, m3, m6, ytd, y1}] from data.json — whole-ETF-market screen
   search: { query: "", loading: false, error: null, result: null, chart: null, chartLoading: false },
   originFilter: null,   // "Country" | "Sector" | "ETFs" | null (section 01 origin filter)
+  momentumFilter: { foundation:null, all:null, etf1y:null, club:null, stars:null, green:null, red:null, month1:null, multi:null, search:null }, // "3 Ups" | "2 Ups" | "2 Downs" | "3 Downs" | null, per section
   sort: {                // per-table client-side sort: { key, dir } — click a column header to change
     all: { key: "m1", dir: "desc" },
     etf1y: { key: "y1", dir: "desc" },
@@ -835,6 +840,29 @@ function pillsHTML(items, selectedLabel, action){
   ).join('') + '</div>';
 }
 
+// Momentum filter: narrows a section's rows to tickers whose 5D/1M/2M
+// pattern matches one of the four ticker-highlight states (see tickerClass
+// above). Reuses that same classification so "3 Ups" selects exactly the
+// tickers whose box is highlighted green, etc.
+const MOMENTUM_FILTERS = ["3 Ups", "2 Ups", "2 Downs", "3 Downs"];
+const MOMENTUM_FILTER_CLASS = { "3 Ups":"mom-pos", "2 Ups":"mom-trend", "2 Downs":"mom-warn", "3 Downs":"mom-neg" };
+function matchesMomentumFilter(filter, w, m1, m2){
+  if (!filter) return true;
+  if (w == null || m1 == null || m2 == null) return false;
+  if (filter === "3 Ups") return w > 0 && m1 > 0 && m2 > 0;
+  if (filter === "2 Ups") return w > 0 && m1 > 0 && m2 < 0;
+  if (filter === "2 Downs") return w < 0 && m1 < 0 && m2 > 0;
+  if (filter === "3 Downs") return w < 0 && m1 < 0 && m2 < 0;
+  return true;
+}
+// Renders the 4 momentum filter pills for one section, colored to match
+// the ticker-highlight box each one selects for.
+function momentumPillsHTML(section, selected){
+  return '<div class="pills">' + MOMENTUM_FILTERS.map(l =>
+    '<button class="pill'+(l===selected?' selected '+MOMENTUM_FILTER_CLASS[l]:'')+'" data-action="momentumFilter" data-tbl="'+section+'" data-v="'+l+'">'+l+'</button>'
+  ).join('') + '</div>';
+}
+
 // Sort a table's rows by any field, nulls always last, numbers or strings.
 function sortRows(rows, key, dir){
   return [...rows].sort((a,b) => {
@@ -911,10 +939,12 @@ function render(){
       t: r.t, n: r.n,
       day: retField(r.t, "1D"), w: retField(r.t, "5D"), m1: retField(r.t, "1M"),
       m2: retField(r.t, "2M"), m3: retField(r.t, "3M"), m6: retField(r.t, "6M"), ytd: retField(r.t, "YTD"), y1: retField(r.t, "1Y")
-    }));
+    }))
+    .filter(r => matchesMomentumFilter(state.momentumFilter.all, r.w, r.m1, r.m2));
   const allBody =
     '<div class="group-label">' + freshnessLabel() + '</div>'
     + originBody
+    + momentumPillsHTML("all", state.momentumFilter.all)
     + '<div class="note">Country, sector, and foundation ETFs. Default sort is by 1M return \u2014 tap any column to sort by it instead, or a filter above to narrow by type.</div>'
     + '<div class="gwrap"><table class="gtable"><thead><tr>'
       + sortableTh("all","t","TICKER") + sortableTh("all","n","NAME")
@@ -928,11 +958,12 @@ function render(){
         + '</tr>').join('')
     + '</tbody></table></div>';
 
-  const etf1yRows = state.etf1YClub || [];
+  const etf1yRows = (state.etf1YClub || []).filter(r => matchesMomentumFilter(state.momentumFilter.etf1y, r.w, r.m1, r.m2));
   const etf1yBody =
     (etf1yRows.length
       ? '<div class="group-label">' + freshnessLabel() + '</div>'
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
+    + momentumPillsHTML("etf1y", state.momentumFilter.etf1y)
     + '<div class="note">Every ETF across the whole market (NYSE, Nasdaq) up 100%+ over the trailing 1 year, price \u2265 $1 \u2014 mostly leveraged and single-stock funds. Sorted by 1-year return by default.</div>'
     + (etf1yRows.length
       ? '<div class="gwrap"><table class="gtable"><thead><tr>'
@@ -948,12 +979,13 @@ function render(){
         + '</tbody></table></div>'
       : '');
 
-  const clubRows = state.club ?? CLUB_FALLBACK;
+  const clubRows = (state.club ?? CLUB_FALLBACK).filter(r => matchesMomentumFilter(state.momentumFilter.club, r.w, r.m1, r.m2));
   const clubFresh = state.club
     ? '<div class="group-label">' + freshnessLabel() + '</div>'
     : '<div class="group-label" style="color:var(--rust)">SNAPSHOT · S&amp;P 500 · MID-JULY 2026 · LIVE SOURCES UNREACHABLE</div>';
   const clubBody =
     clubFresh
+    + momentumPillsHTML("club", state.momentumFilter.club)
     + '<div class="note">US-tradable stocks (NYSE, Nasdaq, ADRs) up 100%+ year-to-date, price ≥ $1, highest first.'
     + (state.club ? ' End-of-day figures from a free full-market screen.' :
        ' Tap refresh to retry the live screen.')
@@ -970,11 +1002,12 @@ function render(){
         + '</tr>').join('')
     + '</tbody></table></div>';
 
-  const starRows = state.starGainers || [];
+  const starRows = (state.starGainers || []).filter(r => matchesMomentumFilter(state.momentumFilter.stars, r.w, r.m1, r.m2));
   const starsBody =
     (starRows.length
       ? '<div class="group-label">' + freshnessLabel() + '</div>'
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
+    + momentumPillsHTML("stars", state.momentumFilter.stars)
     + '<div class="note">Stocks setting new 52-week highs (WSJ new-highs style). Every day a stock makes a new high adds a star, up to ★★★★★ \u2014 stars are cumulative and never reset, even after a missed day. Date shown is when the star was last added.</div>'
     + '<div class="gwrap"><table class="gtable"><thead><tr>'
       + sortableTh("stars","t","TICKER") + sortableTh("stars","sector","SECTOR")
@@ -989,11 +1022,12 @@ function render(){
         + [r.day, r.w, r.m1, r.m2, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
         + '</tr>').join('')
     + '</tbody></table></div>';
-  const greenRows = state.allGreen || [];
+  const greenRows = (state.allGreen || []).filter(r => matchesMomentumFilter(state.momentumFilter.green, r.w, r.m1, r.m2));
   const greenBody =
     (greenRows.length
       ? '<div class="group-label">' + freshnessLabel() + '</div>'
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
+    + momentumPillsHTML("green", state.momentumFilter.green)
     + '<div class="note">Stocks green in all six windows \u2014 5-day, 1-month, 3-month, 6-month, YTD, and 1-year \u2014 price \u2265 $1. Top 50 by 1-year return.</div>'
     + (greenRows.length
       ? '<div class="gwrap"><table class="gtable"><thead><tr>'
@@ -1009,11 +1043,12 @@ function render(){
         + '</tbody></table></div>'
       : '');
 
-  const redRows = state.allRed || [];
+  const redRows = (state.allRed || []).filter(r => matchesMomentumFilter(state.momentumFilter.red, r.w, r.m1, r.m2));
   const redBody =
     (redRows.length
       ? '<div class="group-label">' + freshnessLabel() + '</div>'
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
+    + momentumPillsHTML("red", state.momentumFilter.red)
     + '<div class="note">Stocks red in all six windows \u2014 5-day, 1-month, 3-month, 6-month, YTD, and 1-year \u2014 price \u2265 $1. Worst YTD first.</div>'
     + (redRows.length
       ? '<div class="gwrap"><table class="gtable"><thead><tr>'
@@ -1029,11 +1064,12 @@ function render(){
         + '</tbody></table></div>'
       : '');
 
-  const month1Rows = state.oneMonthGainers || [];
+  const month1Rows = (state.oneMonthGainers || []).filter(r => matchesMomentumFilter(state.momentumFilter.month1, r.w, r.m1, r.m2));
   const month1Body =
     (month1Rows.length
       ? '<div class="group-label">' + freshnessLabel() + '</div>'
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
+    + momentumPillsHTML("month1", state.momentumFilter.month1)
     + '<div class="note">Top 50 stocks by 1-month gain, price \u2265 $1.</div>'
     + (month1Rows.length
       ? '<div class="gwrap"><table class="gtable"><thead><tr>'
@@ -1049,11 +1085,12 @@ function render(){
         + '</tbody></table></div>'
       : '');
 
-  const multiRows = state.multiListed || [];
+  const multiRows = (state.multiListed || []).filter(r => matchesMomentumFilter(state.momentumFilter.multi, r.w, r.m1, r.m2));
   const multiBody =
     (multiRows.length
       ? '<div class="group-label">' + freshnessLabel() + '</div>'
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
+    + momentumPillsHTML("multi", state.momentumFilter.multi)
     + '<div class="note">Stocks showing up in 2 or more of: The 100%+ Club, Star Gainers, All Green, and 1 Month Gainers. Independent bullish signals lining up on the same ticker \u2014 sorted by how many lists it\u2019s in, then 1-year return.</div>'
     + (multiRows.length
       ? '<div class="gwrap"><table class="gtable"><thead><tr>'
@@ -1075,9 +1112,11 @@ function render(){
   const foundationBody =
     pillsHTML(FAMILIES, activeFamily, "family")
     + '<div class="group-label">' + freshnessLabel() + '</div>'
+    + momentumPillsHTML("foundation", state.momentumFilter.foundation)
     + '<div class="note">Returns for each core ' + esc(activeFamily) + ' fund, by asset class.</div>'
     + FOUNDATION_GROUPS.map(g => {
-        const rows = familyList(activeFamily).filter(r => r.group === g);
+        const rows = familyList(activeFamily).filter(r => r.group === g)
+          .filter(r => matchesMomentumFilter(state.momentumFilter.foundation, retField(r.t,"5D"), retField(r.t,"1M"), retField(r.t,"2M")));
         if (!rows.length) return '';
         return '<div class="group-label">' + esc(g.toUpperCase()) + '</div>'
           + '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>NAME</th><th>TODAY</th><th>5D</th><th>1M</th><th>2M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
@@ -1090,6 +1129,7 @@ function render(){
       }).join('');
 
   const sr = state.search.result;
+  const srFiltered = sr ? sr.filter(r => matchesMomentumFilter(state.momentumFilter.search, r.w, r.m1, r.m2)) : sr;
   // Fixed reference set shown below the search results so any searched
   // ticker can be compared directly against these four major indices —
   // same tickers/labels as the chart's benchmark lines above, sourced from
@@ -1115,15 +1155,16 @@ function render(){
     + '</div>'
     + (state.search.loading ? '<div class="note">Searching…</div>' : '')
     + (state.search.error ? '<div class="note warn">' + esc(state.search.error) + '</div>' : '')
+    + (sr && sr.length ? momentumPillsHTML("search", state.momentumFilter.search) : '')
     + (sr && sr.length
-      ? '<div class="group-label">' + sr.length + (sr.length === 1 ? ' MATCH' : ' MATCHES') + '</div>'
+      ? '<div class="group-label">' + srFiltered.length + (srFiltered.length === 1 ? ' MATCH' : ' MATCHES') + '</div>'
         + '<div class="gwrap"><table class="gtable"><thead><tr>'
           + sortableTh("search","t","TICKER") + sortableTh("search","n","NAME") + '<th>IN</th>'
           + sortableTh("search","price","PRICE")
           + sortableTh("search","day","TODAY") + sortableTh("search","w","5D") + sortableTh("search","m1","1M")
           + sortableTh("search","m2","2M") + sortableTh("search","m3","3M") + sortableTh("search","m6","6M") + sortableTh("search","ytd","YTD") + sortableTh("search","y1","1Y")
           + '</tr></thead><tbody>'
-        + sortRows(sr, state.sort.search.key, state.sort.search.dir).map(r =>
+        + sortRows(srFiltered, state.sort.search.key, state.sort.search.dir).map(r =>
             '<tr><td' + tickerClass(r.w, r.m1, r.m2) + '>' + esc(r.t) + '</td>'
             + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.n) + '</td>'
             + '<td style="text-align:left;color:var(--ink-faint);font-size:9.5px;">' + esc(r.inLists.join(', ') || '\u2014') + '</td>'
@@ -1177,6 +1218,9 @@ document.addEventListener("click", e => {
     ensurePeriod();
   } else if (a === "originFilter"){
     state.originFilter = state.originFilter === el.dataset.v ? null : el.dataset.v;
+  } else if (a === "momentumFilter"){
+    const msec = el.dataset.tbl;
+    state.momentumFilter[msec] = state.momentumFilter[msec] === el.dataset.v ? null : el.dataset.v;
   } else if (a === "sortCol"){
     const section = el.dataset.tbl, key = el.dataset.key;
     const cur = state.sort[section];
