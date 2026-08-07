@@ -130,6 +130,7 @@
   </div>
   <div id="freshness" class="freshness">Loading…</div>
   <div id="chips" class="chips"><span class="chips-empty">Green tickers show momentum. Red tickers show decline.</span></div>
+
 </header>
 
 <main id="main"></main>
@@ -595,6 +596,22 @@ function buildChartData(ticker, tickerHist, benchmarks){
   return { series: [tickerSeries, ...benchSeries], axisDates, asOf: axisDates[axisDates.length - 1] };
 }
 
+// Computes a real 2-month return from the same 3-month daily history used
+// for the Search chart, for tickers outside the app's tracked list (whose
+// live-lookup source doesn't serve a 2-month field directly).
+function compute2MFromHistory(hist){
+  if (!hist || hist.length < 2) return null;
+  const last = hist[hist.length - 1];
+  const lastDate = new Date(last.d + "T00:00:00");
+  const closeOnOrBefore = target => {
+    for (let i = hist.length - 1; i >= 0; i--) if (new Date(hist[i].d + "T00:00:00") <= target) return hist[i].c;
+    return hist[0].c;
+  };
+  const minus2 = new Date(lastDate); minus2.setMonth(minus2.getMonth() - 2);
+  const base = closeOnOrBefore(minus2);
+  return base > 0 ? +(((last.c / base) - 1) * 100).toFixed(2) : null;
+}
+
 async function resolveTickers(query){
   const qRaw = query.trim();
   if (!qRaw) throw new Error("empty");
@@ -683,18 +700,32 @@ async function performSearch(){
   state.search.loading = false;
   render();
 
-  // Chart: fetched separately so the results table isn't held up waiting
-  // on 3 months of daily history for 5 different symbols.
+  // Chart + 2M enrichment: fetched separately so the results table isn't
+  // held up waiting on 3 months of daily history for 5 different symbols.
+  // The same 3-month history that powers the chart also lets us compute a
+  // real 2M return for any matched ticker outside the tracked batch list
+  // (whose live-lookup source doesn't serve 2M directly) — once filled in,
+  // the ticker highlight color and the momentum filter buttons both pick
+  // it up automatically on the next render, same as any other section.
   if (primaryTicker){
     state.search.chartLoading = true;
     render();
     try {
-      const [tickerHist, benchmarks] = await Promise.all([
+      const needs2M = (state.search.result || []).filter(r => r.m2 == null).map(r => r.t);
+      const [tickerHist, benchmarks, extraHist] = await Promise.all([
         fetchHistory3M(primaryTicker),
         fetchBenchmarkHistories(),
+        Promise.all(needs2M.filter(t => t !== primaryTicker).map(async t => ({ t, hist: await fetchHistory3M(t).catch(() => null) }))),
       ]);
       if (tickerHist && tickerHist.length > 1){
         state.search.chart = buildChartData(primaryTicker, tickerHist, benchmarks);
+      }
+      const histByTicker = { [primaryTicker]: tickerHist };
+      for (const { t, hist } of extraHist) histByTicker[t] = hist;
+      if (state.search.result){
+        state.search.result = state.search.result.map(r =>
+          r.m2 == null && histByTicker[r.t] ? { ...r, m2: compute2MFromHistory(histByTicker[r.t]) } : r
+        );
       }
     } catch (e) {}
     state.search.chartLoading = false;
