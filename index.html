@@ -145,6 +145,7 @@
 const TIMEFRAMES = ["1M","2M","3M","YTD","1Y"];
 const DEFAULT_PERIOD = "1M";
 const ORIGIN_FILTERS = ["Country","Sector","ETFs"];
+
 const ORIGIN_KEY = { Country: "country", Sector: "sector", ETFs: "foundation" };
 
 const COUNTRY_ETFS = [
@@ -833,11 +834,25 @@ function renderChartSVG(chart){
   const minY = Math.min(...allPts, 0), maxY = Math.max(...allPts, 0);
   const padY = (maxY - minY) * 0.12 || 1;
   const yLo = minY - padY, yHi = maxY + padY;
-  const W = 640, H = 220, padL = 40, padR = 8, padT = 12, padB = 10;
+  const W = 640, H = 220, padL = 40, padR = 8, padT = 12, padB = 22;
   const plotW = W - padL - padR, plotH = H - padT - padB;
   const xFor = i => padL + (n === 1 ? 0 : (i / (n - 1))) * plotW;
   const yFor = v => padT + (1 - (v - yLo) / (yHi - yLo)) * plotH;
   const zeroY = yFor(0);
+  const plotBottom = padT + plotH;
+  // X-axis: a month label at each calendar-month boundary crossed by the
+  // axis, plus light unlabeled tick marks at each Monday for a sense of
+  // weekly granularity without crowding the axis with 13 text labels.
+  const monthTicks = [];
+  let lastMonth = null;
+  axisDates.forEach((d, i) => {
+    const ym = d.slice(0, 7);
+    if (ym !== lastMonth){ monthTicks.push({ i, label: MONTH_ABBR[parseInt(d.slice(5,7),10)-1] }); lastMonth = ym; }
+  });
+  const weekTicks = axisDates
+    .map((d, i) => ({ i, dow: new Date(d + "T00:00:00").getDay() }))
+    .filter(x => x.dow === 1) // Mondays — lands consistently regardless of holidays/gaps in the trading-day series
+    .map(x => x.i);
   const pathFor = s => {
     let d = "", started = false;
     for (const p of s.pts){
@@ -864,6 +879,8 @@ function renderChartSVG(chart){
     + '<line x1="' + padL + '" y1="' + zeroY.toFixed(1) + '" x2="' + (W - padR) + '" y2="' + zeroY.toFixed(1) + '" stroke="var(--line)" stroke-dasharray="3,3" />'
     + yLabel(yHi) + yLabel(0) + yLabel(yLo)
     + lines
+    + weekTicks.map(i => '<line x1="' + xFor(i).toFixed(1) + '" y1="' + plotBottom.toFixed(1) + '" x2="' + xFor(i).toFixed(1) + '" y2="' + (plotBottom + 4).toFixed(1) + '" stroke="var(--line)" stroke-width="1" />').join('')
+    + monthTicks.map(t => '<text x="' + xFor(t.i).toFixed(1) + '" y="' + (plotBottom + 14).toFixed(1) + '" font-size="9" fill="var(--ink-faint)" font-family="var(--mono)" text-anchor="middle">' + t.label + '</text>').join('')
     + '</svg>'
     + '<div style="display:flex;flex-wrap:wrap;padding-top:8px;font-family:var(--mono);font-size:10.5px;color:var(--ink-faint);">' + legend + '</div>';
 }
