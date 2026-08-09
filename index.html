@@ -141,6 +141,7 @@
 /* ================================================================ *
  *  STATIC DATA
  * ================================================================ */
+
 const TIMEFRAMES = ["1M","2M","3M","YTD","1Y"];
 const DEFAULT_PERIOD = "1M";
 const ORIGIN_FILTERS = ["Country","Sector","ETFs"];
@@ -610,6 +611,30 @@ function compute2MFromHistory(hist){
   const minus2 = new Date(lastDate); minus2.setMonth(minus2.getMonth() - 2);
   const base = closeOnOrBefore(minus2);
   return base > 0 ? +(((last.c / base) - 1) * 100).toFixed(2) : null;
+}
+
+// Compares the primary searched result against the S&P 500 (SPY \u2014 the
+// standard market benchmark, and the same index used as the primary line
+// in the comparison chart) across all 7 return windows shown in the
+// table (5D through 1Y). Only returns a verdict once every window has
+// both values available (e.g. it waits for 2M to finish loading for
+// tickers outside the tracked batch), so the header doesn't flash a
+// premature or partial verdict.
+function benchmarkVerdict(primary, spyBatch){
+  if (!primary || !spyBatch) return null;
+  const spyKeys = { w:"5D", m1:"1M", m2:"2M", m3:"3M", m6:"6M", ytd:"YTD", y1:"1Y" };
+  const fields = Object.keys(spyKeys);
+  let compared = 0, beat = 0;
+  for (const f of fields){
+    const pv = primary[f], sv = spyBatch[spyKeys[f]];
+    if (pv == null || sv == null) continue;
+    compared++;
+    if (pv > sv) beat++;
+  }
+  if (compared < fields.length) return null;
+  if (beat === fields.length) return "all";
+  if (beat === 0) return "none";
+  return "some";
 }
 
 async function resolveTickers(query){
@@ -1180,9 +1205,16 @@ function render(){
       inLists: findListings(b.key)
     };
   });
+  const verdict = benchmarkVerdict(sr && sr.length ? sr[0] : null, state.returns["SPY"]);
+  const verdictLabel = { all:"BEATS BENCHMARKS", some:"SOMETIMES BEATS BENCHMARKS", none:"DOES NOT BEAT BENCHMARKS" }[verdict];
+  const verdictColor = { all:"#16A34A", some:"#F97316", none:"#DC2626" }[verdict];
+  const verdictHTML = verdict
+    ? '<div style="font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:1px;color:' + verdictColor + ';padding-bottom:6px;">' + verdictLabel + '</div>'
+    : '';
   const searchBody =
     '<div class="group-label">LIVE SEARCH</div>'
     + '<div class="note">Search any US-listed stock or ETF by ticker or company name. Companies with multiple share classes (e.g. Alphabet\u2019s GOOGL/GOOG) return every class.</div>'
+    + verdictHTML
     + '<div class="pills" style="align-items:center;flex-wrap:nowrap;">'
     + '<input id="searchInput" type="text" placeholder="e.g. ServiceNow or NOW" value="' + esc(state.search.query || '') + '" '
       + 'style="flex:1;min-width:0;font-family:var(--mono);font-size:13px;padding:8px 12px;border:1.5px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);" />'
