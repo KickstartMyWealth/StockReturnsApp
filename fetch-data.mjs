@@ -124,6 +124,7 @@ async function attach2MReturns(lists) {
       await new Promise(res => setTimeout(res, 150)); // be polite
     }
   }));
+
   for (const rows of lists) {
     if (!rows) continue;
     for (const row of rows) row.m2 = twoMonth[row.t] ?? null;
@@ -151,18 +152,24 @@ async function main() {
     const j = await fetchJSON(SCREEN_URL);
     const map = j?.data?.data || {};
 
-    // 100%+ Club: YTD > 100%, price >= $1. Cap at YTD_SANITY_CAP to exclude
-    // reverse-split-style data artifacts (e.g. a stock erroneously showing
-    // +1,000,000% YTD) rather than genuine outsized winners.
+    // 100% Club: YTD >= 100% OR 1-year return >= 100%, price >= $1. Each
+    // metric has its own sanity cap to exclude reverse-split-style data
+    // artifacts (e.g. a stock erroneously showing +1,000,000% YTD) rather
+    // than genuine outsized winners.
     const YTD_SANITY_CAP = 2000; // percent
+    const CLUB_Y1_SANITY_CAP = 5000; // percent — same order of magnitude as the ETF 1Y screen below
     const RW = x => { const n = Number(x); return Number.isFinite(n) ? +n.toFixed(1) : null; };
     const rows = Object.entries(map)
       .map(([t, v]) => ({ t, n: "", sector: v.sector || null, price: Number(v.price), ytd: Number(v.chYTD), day: Number(v.change),
         w: RW(v.ch1w), m1: RW(v.ch1m), m3: RW(v.ch3m), m6: RW(v.ch6m), y1: RW(v.ch1y), volume: Number(v.volume) }))
-      .filter(r => Number.isFinite(r.price) && Number.isFinite(r.ytd) && r.price >= 1 && r.ytd > 100 && r.ytd <= YTD_SANITY_CAP
+      .filter(r => Number.isFinite(r.price) && r.price >= 1
+        && ((Number.isFinite(r.ytd) && r.ytd >= 100 && r.ytd <= YTD_SANITY_CAP) || (Number.isFinite(r.y1) && r.y1 >= 100 && r.y1 <= CLUB_Y1_SANITY_CAP))
         && Number.isFinite(r.volume) && r.volume >= MIN_VOLUME)
-      .sort((a, b) => b.ytd - a.ytd)
-      // No top-N cap here: every stock over 100% YTD (below the sanity cap) is included.
+      .sort((a, b) => {
+        const bestOf = r => Math.max(Number.isFinite(r.ytd) ? r.ytd : -Infinity, Number.isFinite(r.y1) ? r.y1 : -Infinity);
+        return bestOf(b) - bestOf(a);
+      })
+      // No top-N cap here: every stock over 100% YTD or 1Y (below the sanity caps) is included.
       .map(({ volume, ...r }) => ({ ...r, price: +r.price.toFixed(2), ytd: +r.ytd.toFixed(2), day: Number.isFinite(r.day) ? +r.day.toFixed(2) : null }));
     if (rows.length) { club = rows; clubSource = "screen"; }
 
