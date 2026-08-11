@@ -298,17 +298,18 @@ async function fetchWithProxies(url){
  * Free and keyless; covers all US-listed stocks (NYSE, Nasdaq, ADRs) with
  * end-of-day data. Endpoint is undocumented, so parsing is defensive and
  * the app falls back to the labeled snapshot if the shape ever changes. */
-const CLUB_URL = "https://stockanalysis.com/_api/endpoints/screener/data-points?type=s&ids=chYTD+price";
+const CLUB_URL = "https://stockanalysis.com/_api/endpoints/screener/data-points?type=s&ids=chYTD+ch1y+price";
 
 function parseClub(jsonText){
   const j = JSON.parse(jsonText);
   const map = (j && j.data && j.data.data) || {};
+  const bestOf = r => Math.max(isFinite(r.ytd) ? r.ytd : -Infinity, isFinite(r.y1) ? r.y1 : -Infinity);
   const out = Object.entries(map)
-    .map(([t,v]) => ({ t:String(t).toUpperCase(), n:"", price:Number(v.price), ytd:Number(v.chYTD) }))
-    .filter(r => isFinite(r.price) && isFinite(r.ytd) && r.price >= 1 && r.ytd > 100)
-    .sort((a,b)=>b.ytd-a.ytd)
+    .map(([t,v]) => ({ t:String(t).toUpperCase(), n:"", price:Number(v.price), ytd:Number(v.chYTD), y1:Number(v.ch1y) }))
+    .filter(r => isFinite(r.price) && r.price >= 1 && ((isFinite(r.ytd) && r.ytd >= 100) || (isFinite(r.y1) && r.y1 >= 100)))
+    .sort((a,b)=>bestOf(b)-bestOf(a))
     .slice(0,50)
-    .map(r => ({ ...r, ytd:+r.ytd.toFixed(2) }));
+    .map(r => ({ ...r, ytd: isFinite(r.ytd) ? +r.ytd.toFixed(2) : null, y1: isFinite(r.y1) ? +r.y1.toFixed(2) : null }));
   return out;
 }
 
@@ -357,12 +358,13 @@ async function claudeFetchReturns(period){
 
 async function claudeFetchClub(){
   const parsed = await askClaudeJSON(
-    'Use web search to find stocks up more than 100% year-to-date as of the latest close, share price at least $1.00, covering the whole universe a US retail investor can buy (NYSE, Nasdaq, S&P 500, Russell small caps, US-listed ADRs — not just the S&P 500). Reply with ONLY a raw JSON array like [{"t":"TICKER","n":"Name","price":12.3,"ytd":152.3}], sorted by ytd descending, top 25-30 confirmed names. No prose, no fences.'
+    'Use web search to find stocks up 100% or more year-to-date OR up 100% or more over the trailing 1 year as of the latest close, share price at least $1.00, covering the whole universe a US retail investor can buy (NYSE, Nasdaq, S&P 500, Russell small caps, US-listed ADRs — not just the S&P 500). Reply with ONLY a raw JSON array like [{"t":"TICKER","n":"Name","price":12.3,"ytd":152.3,"y1":210.5}], sorted by whichever of ytd/y1 is higher, descending, top 25-30 confirmed names. No prose, no fences.'
   );
+  const bestOf = r => Math.max(typeof r.ytd==="number"?r.ytd:-Infinity, typeof r.y1==="number"?r.y1:-Infinity);
   const rows = (Array.isArray(parsed)?parsed:[])
-    .filter(r=>r && r.t && typeof r.price==="number" && r.price>=1 && r.ytd>100)
-    .map(r=>({t:String(r.t).toUpperCase(),n:String(r.n||r.t),price:r.price,ytd:+Number(r.ytd).toFixed(2)}))
-    .sort((a,b)=>b.ytd-a.ytd);
+    .filter(r=>r && r.t && typeof r.price==="number" && r.price>=1 && ((typeof r.ytd==="number" && r.ytd>=100) || (typeof r.y1==="number" && r.y1>=100)))
+    .map(r=>({t:String(r.t).toUpperCase(),n:String(r.n||r.t),price:r.price,ytd: typeof r.ytd==="number"?+r.ytd.toFixed(2):null, y1: typeof r.y1==="number"?+r.y1.toFixed(2):null}))
+    .sort((a,b)=>bestOf(b)-bestOf(a));
   if (!rows.length) throw new Error("empty");
   return rows;
 }
@@ -1084,7 +1086,7 @@ function render(){
   const clubBody =
     clubFresh
     + momentumPillsHTML("club", state.momentumFilter.club)
-    + '<div class="note">US-tradable stocks (NYSE, Nasdaq, ADRs) up 100%+ year-to-date, price ≥ $1, highest first.'
+    + '<div class="note">US-tradable stocks (NYSE, Nasdaq, ADRs) up 100% or more year-to-date OR over the trailing 1 year, price ≥ $1, highest first.'
     + (state.club ? ' End-of-day figures from a free full-market screen.' :
        ' Tap refresh to retry the live screen.')
     + '</div>'
@@ -1161,7 +1163,6 @@ function render(){
             + '</tr>').join('')
         + '</tbody></table></div>'
       : '');
-
   const month1Rows = (state.oneMonthGainers || []).filter(r => matchesMomentumFilter(state.momentumFilter.month1, r.w, r.m1, r.m2));
   const month1Body =
     (month1Rows.length
@@ -1217,10 +1218,10 @@ function render(){
           .filter(r => matchesMomentumFilter(state.momentumFilter.foundation, retField(r.t,"5D"), retField(r.t,"1M"), retField(r.t,"2M")));
         if (!rows.length) return '';
         return '<div class="group-label">' + esc(g.toUpperCase()) + '</div>'
-          + '<div class="gwrap"><table class="gtable"><thead><tr><th>TICKER</th><th>NAME</th><th class="today-col">TODAY</th><th>5D</th><th>1M</th><th>2M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
+          + '<div class="gwrap"><table class="gtable" style="table-layout:fixed;"><thead><tr><th style="width:50px;">TICKER</th><th style="width:130px;">NAME</th><th class="today-col">TODAY</th><th>5D</th><th>1M</th><th>2M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
           + rows.map(r =>
               '<tr><td' + tickerClass(retField(r.t,"5D"), retField(r.t,"1M"), retField(r.t,"2M")) + '>' + esc(r.t) + '</td>'
-              + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.n) + '</td>'
+              + '<td title="' + esc(r.n) + '" style="text-align:left;color:var(--ink-faint);font-size:10.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(r.n) + '</td>'
               + pctTd(retField(r.t,"1D"), 1, 'today-col') + pctTd(retField(r.t,"5D"), 1, periodCellClass(retField(r.t,"5D"), retField(r.t,"1M"), retField(r.t,"2M"), 'w')) + pctTd(retField(r.t,"1M"), 1, periodCellClass(retField(r.t,"5D"), retField(r.t,"1M"), retField(r.t,"2M"), 'm1')) + pctTd(retField(r.t,"2M"), 1, periodCellClass(retField(r.t,"5D"), retField(r.t,"1M"), retField(r.t,"2M"), 'm2')) + ["3M","6M","YTD","1Y"].map(k => pctTd(retField(r.t, k), 1)).join('')
               + '</tr>').join('')
           + '</tbody></table></div>';
@@ -1293,7 +1294,7 @@ function render(){
       sectionHTML("foundation","01","Foundation ETFs", 0, foundationBody)
     + sectionHTML("all","02","Base ETFs, Country, Sectors", 0, allBody)
     + sectionHTML("etf1y","03","ETFs above 100% 1Y", 0, etf1yBody)
-    + sectionHTML("club100","04","The 100%+ Club YTD", state.selected.club100.size, clubBody)
+    + sectionHTML("club100","04","The 100% Club YTD or 1Y", state.selected.club100.size, clubBody)
     + sectionHTML("stars","05","Star Gainers", state.selected.stars.size, starsBody)
     + sectionHTML("green","06","All Green All Year", 0, greenBody)
     + sectionHTML("red","07","Shorts - All Red All Year", 0, redBody)
