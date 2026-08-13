@@ -204,6 +204,8 @@ const FOUNDATION_MASTER = [
   {group:"Domestic Equity",n:"U.S. Mid-Cap",schwab:"SCHM",vanguard:"VO",ishares:"IJH"},
   {group:"Domestic Equity",n:"U.S. Small-Cap",schwab:"SCHA",vanguard:"VB",ishares:"IJR"},
   {group:"Domestic Equity",n:"U.S. REIT",schwab:"SCHH",vanguard:"VNQ",ishares:"IYR"},
+  {group:"Domestic Equity",n:"U.S. Dividend Equity",schwab:"SCHD",vanguard:null,ishares:null},
+  {group:"Domestic Equity",n:"Nasdaq-100",schwab:"QQQ",vanguard:null,ishares:null},
   {group:"International Equity",n:"Intl Equity",schwab:"SCHF",vanguard:"VEA",ishares:"EFA"},
   {group:"International Equity",n:"Intl Small-Cap Equity",schwab:"SCHC",vanguard:"VSS",ishares:"SCZ"},
   {group:"International Equity",n:"Emerging Markets Equity",schwab:"SCHE",vanguard:"VWO",ishares:"EEM"},
@@ -218,10 +220,11 @@ const ALL_TICKERS = [
   ...COUNTRY_ETFS.map(e=>({t:e.t,n:e.n,origin:"country"})),
   ...SECTOR_ETFS.map(e=>({t:e.t,n:e.n,origin:"sector"})),
   ...FAMILIES.flatMap(f=>familyList(f).map(e=>({t:e.t,n:e.n+" ("+f+")",origin:"foundation"}))),
-  {t:"SCHD",n:"US Dividend Equity (Schwab)",origin:"foundation"}, // shown under the "ETFs" filter alongside the core family funds
+  // SCHD and QQQ are no longer listed here directly — they're now part of
+  // FOUNDATION_MASTER (Schwab-only), so the flatMap above already includes
+  // them; a second manual entry here would double-list them in this table.
   {t:"VOO",n:"S&P 500 (Vanguard)",origin:"foundation"}, // shown under the "ETFs" filter alongside the core family funds
   {t:"VXUS",n:"Total International Stock (Vanguard)",origin:"foundation"}, // shown under the "ETFs" filter alongside the core family funds
-  {t:"QQQ",n:"Nasdaq-100",origin:"foundation"}, // broad-market index tracker, not a single sector — moved out of SECTOR_ETFS
   {t:"TOPT",n:"iShares Top 20 US Stocks",origin:"foundation"} // broad-market index tracker, not a single sector — moved out of SECTOR_ETFS
 ];
 // SPY/IWM/DIA are fetched purely to power the Search section's benchmark
