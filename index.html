@@ -454,6 +454,7 @@ const state = {
   search: { query: "", loading: false, error: null, result: null, chart: null, chartLoading: false },
   originFilter: null,   // "Country" | "Sector" | "ETFs" | null (section 01 origin filter)
   momentumFilter: { foundation:null, all:null, etf1y:null, club:null, stars:null, green:null, red:null, month1:null, multi:null, search:null }, // "3 Ups" | "2 Ups" | "2 Downs" | "3 Downs" | null, per section
+  excludeLeveraged: { etf1y: true }, // "Leveraged ETFs" toggle, per section — selected (true) by default, meaning leveraged funds are hidden until the user deselects it
   sort: {                // per-table client-side sort: { key, dir } — click a column header to change
     all: { key: "m1", dir: "desc" },
     etf1y: { key: "y1", dir: "desc" },
@@ -948,6 +949,15 @@ function pillsHTML(items, selectedLabel, action){
 // tickers whose box is highlighted green, etc.
 const MOMENTUM_FILTERS = ["3 Ups", "2 Ups", "2 Downs", "3 Downs"];
 const MOMENTUM_FILTER_CLASS = { "3 Ups":"mom-pos", "2 Ups":"mom-trend", "2 Downs":"mom-warn", "3 Downs":"mom-neg" };
+// A fund counts as "leveraged" for the Leveraged ETFs toggle if its name
+// contains any of these terms (case-insensitive) — covers the common
+// naming conventions for 2x/3x, Bull, Long, and explicitly "Leveraged" funds.
+const LEVERAGED_KEYWORDS = ["bull", "2x", "3x", "long", "leveraged"];
+function isLeveragedName(name){
+  if (!name) return false;
+  const low = name.toLowerCase();
+  return LEVERAGED_KEYWORDS.some(k => low.includes(k));
+}
 function matchesMomentumFilter(filter, w, m1, m2){
   if (!filter) return true;
   if (w == null || m1 == null || m2 == null) return false;
@@ -1061,11 +1071,15 @@ function render(){
         + '</tr>').join('')
     + '</tbody></table></div>';
 
-  const etf1yRows = (state.etf1YClub || []).filter(r => matchesMomentumFilter(state.momentumFilter.etf1y, r.w, r.m1, r.m2));
+  const etf1yExcludeLev = state.excludeLeveraged.etf1y;
+  const etf1yRows = (state.etf1YClub || [])
+    .filter(r => !etf1yExcludeLev || !isLeveragedName(r.n))
+    .filter(r => matchesMomentumFilter(state.momentumFilter.etf1y, r.w, r.m1, r.m2));
   const etf1yBody =
     (etf1yRows.length
       ? '<div class="group-label">' + freshnessLabel() + '</div>'
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
+    + '<div class="pills"><button class="pill' + (etf1yExcludeLev ? ' selected' : '') + '" data-action="toggleLeveraged" data-tbl="etf1y">Leveraged ETFs</button></div>'
     + momentumPillsHTML("etf1y", state.momentumFilter.etf1y)
     + '<div class="note">Every ETF across the whole market (NYSE, Nasdaq) up 100%+ over the trailing 1 year, price \u2265 $1 \u2014 mostly leveraged and single-stock funds. Sorted by 1-year return by default.</div>'
     + (etf1yRows.length
@@ -1330,6 +1344,9 @@ document.addEventListener("click", e => {
   } else if (a === "momentumFilter"){
     const msec = el.dataset.tbl;
     state.momentumFilter[msec] = state.momentumFilter[msec] === el.dataset.v ? null : el.dataset.v;
+  } else if (a === "toggleLeveraged"){
+    const msec = el.dataset.tbl;
+    state.excludeLeveraged[msec] = !state.excludeLeveraged[msec];
   } else if (a === "sortCol"){
     const section = el.dataset.tbl, key = el.dataset.key;
     const cur = state.sort[section];
