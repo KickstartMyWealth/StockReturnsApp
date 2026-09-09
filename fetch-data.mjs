@@ -142,12 +142,13 @@ async function main() {
       const h = await history(t);
       const r = h ? computeReturns(h) : null;
       if (r) returns[t] = r; else { failed++; console.warn("no data for", t); }
+
       await new Promise(res => setTimeout(res, 150)); // be polite
     }
   }));
 
   // ---- Whole-market screen: 100%+ Club and Star Gainers in one call ----
-  let club = null, clubSource = null, starGainers = null, starsState = null, allGreen = null, allRed = null, oneMonthGainers = null, multiListed = null;
+  let club = null, clubSource = null, starGainers = null, starsState = null, allGreen = null, allRed = null, oneMonthGainers = null, multiListed = null, stockReturnSelector = null;
   try {
     const j = await fetchJSON(SCREEN_URL);
     const map = j?.data?.data || {};
@@ -262,9 +263,27 @@ async function main() {
       }));
     if (!oneMonthGainers.length) oneMonthGainers = null;
 
+    // ---- Stock Return Selector: full-market stock screen, YTD >= 30%,
+    // for section 03's 30-50/50-75/75-100/100%+ button filters (the client
+    // buckets this one list by YTD rather than fetching four separate lists).
+    stockReturnSelector = Object.entries(map)
+      .map(([t, v]) => ({ t, sector: v.sector || null, price: P(v.price), w: P(v.ch1w), m1: P(v.ch1m), m3: P(v.ch3m), m6: P(v.ch6m), ytd: P(v.chYTD), y1: P(v.ch1y), day: P(v.change), volume: Number(v.volume) }))
+      .filter(r => r.price >= 1 && r.ytd != null && r.ytd >= 30 && r.ytd <= YTD_SANITY_CAP
+        && Number.isFinite(r.volume) && r.volume >= MIN_VOLUME)
+      .sort((a, b) => b.ytd - a.ytd)
+      .slice(0, 200)
+      .map(({ volume, ...r }) => ({
+        ...r, price: +r.price.toFixed(2),
+        w: r.w != null ? +r.w.toFixed(1) : null, m1: r.m1 != null ? +r.m1.toFixed(1) : null,
+        m3: r.m3 != null ? +r.m3.toFixed(1) : null, m6: r.m6 != null ? +r.m6.toFixed(1) : null,
+        ytd: +r.ytd.toFixed(1), y1: r.y1 != null ? +r.y1.toFixed(1) : null,
+        day: r.day != null ? +r.day.toFixed(1) : null,
+      }));
+    if (!stockReturnSelector.length) stockReturnSelector = null;
+
     // Attach real 2-month returns before building multiListed, so its
     // spread-copied rows (below) inherit m2 along with everything else.
-    await attach2MReturns([club, starGainers, allGreen, allRed, oneMonthGainers]);
+    await attach2MReturns([club, starGainers, allGreen, allRed, oneMonthGainers, stockReturnSelector]);
 
     // ---- Tickers Listed Above Multiple Times: appears in 2+ of the four
     // bullish lists (Club, Star Gainers, All Green, 1 Month Gainers).
@@ -336,9 +355,10 @@ async function main() {
     oneMonthGainers,
     multiListed,
     etf1YClub,
+    stockReturnSelector,
   };
   writeFileSync("data.json", JSON.stringify(payload));
-  console.log(`Wrote data.json — ${Object.keys(returns).length} tickers ok, ${failed} failed, club: ${club ? club.length : "unavailable"}, stars: ${starGainers ? starGainers.length : "unavailable"}, green: ${allGreen ? allGreen.length : "unavailable"}, red: ${allRed ? allRed.length : "unavailable"}, oneMonth: ${oneMonthGainers ? oneMonthGainers.length : "unavailable"}, multiListed: ${multiListed ? multiListed.length : "unavailable"}, etf1YClub: ${etf1YClub ? etf1YClub.length : "unavailable"}`);
+  console.log(`Wrote data.json — ${Object.keys(returns).length} tickers ok, ${failed} failed, club: ${club ? club.length : "unavailable"}, stars: ${starGainers ? starGainers.length : "unavailable"}, green: ${allGreen ? allGreen.length : "unavailable"}, red: ${allRed ? allRed.length : "unavailable"}, oneMonth: ${oneMonthGainers ? oneMonthGainers.length : "unavailable"}, multiListed: ${multiListed ? multiListed.length : "unavailable"}, etf1YClub: ${etf1YClub ? etf1YClub.length : "unavailable"}, stockReturnSelector: ${stockReturnSelector ? stockReturnSelector.length : "unavailable"}`);
   if (Object.keys(returns).length < 10) process.exit(1); // don't commit a broken file
 }
 
