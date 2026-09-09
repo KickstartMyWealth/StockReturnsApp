@@ -153,6 +153,18 @@ const ORIGIN_FILTERS = ["Country","Sector","ETFs"];
 
 const ORIGIN_KEY = { Country: "country", Sector: "sector", ETFs: "foundation" };
 
+// Section 03 "Stock Return Selector" buckets stocks by YTD return band.
+const RETURN_BUCKETS = ["30-50%", "50-75%", "75-100%", "100%+"];
+function matchesReturnBucket(bucket, ytd){
+  if (!bucket) return true;
+  if (ytd == null) return false;
+  if (bucket === "30-50%") return ytd >= 30 && ytd < 50;
+  if (bucket === "50-75%") return ytd >= 50 && ytd < 75;
+  if (bucket === "75-100%") return ytd >= 75 && ytd < 100;
+  if (bucket === "100%+") return ytd >= 100;
+  return true;
+}
+
 const COUNTRY_ETFS = [
   {t:"EWJ",n:"Japan",grp:"Developed"},{t:"EWA",n:"Australia",grp:"Developed"},
 
@@ -432,7 +444,7 @@ async function fetchAllReturns(onProgress){
  *  STATE
  * ================================================================ */
 const state = {
-  expanded: { country:false, sector:false, foundation:false, all:false, club100:false, stars:false, green:false, red:false, month1:false, multi:false, search:false },
+  expanded: { country:false, sector:false, foundation:false, all:false, returnSelector:false, club100:false, stars:false, green:false, red:false, month1:false, multi:false, search:false },
   selected: { country:new Set(), sector:new Set(), foundation:new Set(), club100:new Set(), stars:new Set() },
   family: "Schwab",
   timeframe: null,
@@ -451,12 +463,15 @@ const state = {
   oneMonthGainers: null, // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
   multiListed: null,   // [{t, price, w, m1, m3, m6, ytd, y1, count, inLists}] from data.json
   etf1YClub: null,      // [{t, n, price, day, w, m1, m3, m6, ytd, y1}] from data.json — whole-ETF-market screen
+  stockReturnSelector: null, // [{t, sector, price, day, w, m1, m3, m6, ytd, y1}] from data.json — stocks up 30%+ YTD, bucketed on the client
   search: { query: "", loading: false, error: null, result: null, chart: null, chartLoading: false },
   originFilter: null,   // "Country" | "Sector" | "ETFs" | null (section 01 origin filter)
-  momentumFilter: { foundation:null, all:null, etf1y:null, club:null, stars:null, green:null, red:null, month1:null, multi:null, search:null }, // "3 Ups" | "2 Ups" | "2 Downs" | "3 Downs" | null, per section
+  returnBucketFilter: null, // "30-50%" | "50-75%" | "75-100%" | "100%+" | null (section 03 bucket filter)
+  momentumFilter: { foundation:null, all:null, etf1y:null, returnSelector:null, club:null, stars:null, green:null, red:null, month1:null, multi:null, search:null }, // "3 Ups" | "2 Ups" | "2 Downs" | "3 Downs" | null, per section
   showLeveraged: { etf1y: true }, // "Leveraged ETFs" toggle, per section — selected (true) by default, meaning ALL ETFs (including leveraged) are shown; deselecting hides leveraged funds
   sort: {                // per-table client-side sort: { key, dir } — click a column header to change
     all: { key: "m1", dir: "desc" },
+    returnSelector: { key: "ytd", dir: "desc" },
     etf1y: { key: "y1", dir: "desc" },
     search: { key: "m3", dir: "desc" },
     club: { key: "ytd", dir: "desc" },
@@ -509,6 +524,7 @@ function findListings(t){
   const labels = [];
   const inArr = arr => Array.isArray(arr) && arr.some(r => r.t === t);
   if (inArr(state.club)) labels.push("100%+ Club");
+  if (inArr(state.stockReturnSelector)) labels.push("Stock Return Selector");
   if (inArr(state.etf1YClub)) labels.push("ETFs above 100% 1Y");
   if (inArr(state.starGainers)) labels.push("Star Gainers");
   if (inArr(state.allGreen)) labels.push("All Green");
@@ -1072,6 +1088,31 @@ function render(){
         + '</tr>').join('')
     + '</tbody></table></div>';
 
+  const returnBucketBody = pillsHTML(RETURN_BUCKETS, state.returnBucketFilter, "returnBucket");
+  const returnRows = (state.stockReturnSelector || [])
+    .filter(r => matchesReturnBucket(state.returnBucketFilter, r.ytd))
+    .filter(r => matchesMomentumFilter(state.momentumFilter.returnSelector, r.w, r.m1, r.m2));
+  const returnSelectorBody =
+    (returnRows.length
+      ? '<div class="group-label">' + freshnessLabel() + '</div>'
+      : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
+    + returnBucketBody
+    + momentumPillsHTML("returnSelector", state.momentumFilter.returnSelector)
+    + '<div class="note">US-tradable stocks (NYSE, Nasdaq, ADRs) up 30% or more year-to-date, price \u2265 $1. Pick a return band above, or leave unselected to see all.</div>'
+    + (returnRows.length
+      ? '<div class="gwrap"><table class="gtable"><thead><tr>'
+        + sortableTh("returnSelector","t","TICKER") + sortableTh("returnSelector","sector","SECTOR")
+        + sortableTh("returnSelector","day","TODAY","today-col") + sortableTh("returnSelector","w","5D") + sortableTh("returnSelector","m1","1M")
+        + sortableTh("returnSelector","m2","2M") + sortableTh("returnSelector","m3","3M") + sortableTh("returnSelector","m6","6M") + sortableTh("returnSelector","ytd","YTD") + sortableTh("returnSelector","y1","1Y")
+        + '</tr></thead><tbody>'
+        + sortRows(returnRows, state.sort.returnSelector.key, state.sort.returnSelector.dir).map(r =>
+            '<tr><td' + tickerClass(r.w, r.m1, r.m2) + '>' + esc(r.t) + '</td>'
+            + '<td title="' + esc(r.sector || '\u2014') + '" style="text-align:left;color:var(--ink-faint);font-size:10.5px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(r.sector || '\u2014') + '</td>'
+            + pctTd(r.day, 1, 'today-col') + pctTd(r.w, 1, periodCellClass(r.w, r.m1, r.m2, 'w')) + pctTd(r.m1, 1, periodCellClass(r.w, r.m1, r.m2, 'm1')) + pctTd(r.m2, 1, periodCellClass(r.w, r.m1, r.m2, 'm2')) + [r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
+            + '</tr>').join('')
+        + '</tbody></table></div>'
+      : '');
+
   const etf1yShowLev = state.showLeveraged.etf1y;
   const etf1yRows = (state.etf1YClub || [])
     .filter(r => etf1yShowLev || !isLeveragedName(r.n))
@@ -1311,14 +1352,15 @@ function render(){
   $("#main").innerHTML =
       sectionHTML("foundation","01","Foundation ETFs", 0, foundationBody)
     + sectionHTML("all","02","Base ETFs, Country, Sectors", 0, allBody)
-    + sectionHTML("etf1y","03","ETFs above 100% 1Y", 0, etf1yBody)
-    + sectionHTML("green","04","All Green All Year", 0, greenBody)
-    + sectionHTML("club100","05","The 100% Club YTD or 1Y", state.selected.club100.size, clubBody)
-    + sectionHTML("stars","06","Star Gainers", state.selected.stars.size, starsBody)
-    + sectionHTML("month1","07","1 Month Gainers", 0, month1Body)
-    + sectionHTML("multi","08","Tickers Listed Above Multiple Times", 0, multiBody)
-    + sectionHTML("red","09","Shorts - All Red All Year", 0, redBody)
-    + sectionHTML("search","10","Search", 0, searchBody)
+    + sectionHTML("returnSelector","03","Stock Return Selector", 0, returnSelectorBody)
+    + sectionHTML("etf1y","04","ETFs above 100% 1Y", 0, etf1yBody)
+    + sectionHTML("green","05","All Green All Year", 0, greenBody)
+    + sectionHTML("club100","06","The 100% Club YTD or 1Y", state.selected.club100.size, clubBody)
+    + sectionHTML("stars","07","Star Gainers", state.selected.stars.size, starsBody)
+    + sectionHTML("month1","08","1 Month Gainers", 0, month1Body)
+    + sectionHTML("multi","09","Tickers Listed Above Multiple Times", 0, multiBody)
+    + sectionHTML("red","10","Shorts - All Red All Year", 0, redBody)
+    + sectionHTML("search","11","Search", 0, searchBody)
     + '<div class="spacer"></div>';
 }
 
@@ -1342,6 +1384,8 @@ document.addEventListener("click", e => {
     ensurePeriod();
   } else if (a === "originFilter"){
     state.originFilter = state.originFilter === el.dataset.v ? null : el.dataset.v;
+  } else if (a === "returnBucket"){
+    state.returnBucketFilter = state.returnBucketFilter === el.dataset.v ? null : el.dataset.v;
   } else if (a === "momentumFilter"){
     const msec = el.dataset.tbl;
     state.momentumFilter[msec] = state.momentumFilter[msec] === el.dataset.v ? null : el.dataset.v;
@@ -1414,6 +1458,7 @@ async function loadData(force){
         oneMonthGainers: j.oneMonthGainers || null,
         multiListed: j.multiListed || null,
         etf1YClub: j.etf1YClub || null,
+        stockReturnSelector: j.stockReturnSelector || null,
         clubSource: j.club ? (j.clubSource || "screen") : null,
         clubFetchedAt: j.generatedAt ? new Date(j.generatedAt) : null,
         loading: false
