@@ -471,7 +471,7 @@ const state = {
   showLeveraged: { etf1y: true }, // "Leveraged ETFs" toggle, per section — selected (true) by default, meaning ALL ETFs (including leveraged) are shown; deselecting hides leveraged funds
   sort: {                // per-table client-side sort: { key, dir } — click a column header to change
     all: { key: "ytd", dir: "desc" },
-    returnSelector: { key: "ytd", dir: "desc" },
+    returnSelector: { key: "y1", dir: "desc" },
     etf1y: { key: "y1", dir: "desc" },
     search: { key: "m3", dir: "desc" },
     club: { key: "y1", dir: "desc" },
@@ -1386,7 +1386,7 @@ document.addEventListener("click", e => {
     state.originFilter = state.originFilter === el.dataset.v ? null : el.dataset.v;
   } else if (a === "returnBucket"){
     state.returnBucketFilter = state.returnBucketFilter === el.dataset.v ? null : el.dataset.v;
-    state.sort.returnSelector = { key: state.returnBucketFilter === "100%+" ? "y1" : "ytd", dir: "desc" };
+    state.sort.returnSelector = { key: "y1", dir: "desc" };
   } else if (a === "momentumFilter"){
     const msec = el.dataset.tbl;
     state.momentumFilter[msec] = state.momentumFilter[msec] === el.dataset.v ? null : el.dataset.v;
