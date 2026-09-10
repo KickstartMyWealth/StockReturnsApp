@@ -155,13 +155,13 @@ const ORIGIN_KEY = { Country: "country", Sector: "sector", ETFs: "foundation" };
 
 // Section 03 "Stock Return Selector" buckets stocks by YTD return band.
 const RETURN_BUCKETS = ["30-50%", "50-75%", "75-100%", "100%+"];
-function matchesReturnBucket(bucket, ytd){
+function matchesReturnBucket(bucket, ytd, y1){
   if (!bucket) return true;
+  if (bucket === "100%+") return (ytd != null && ytd >= 100) || (y1 != null && y1 >= 100);
   if (ytd == null) return false;
   if (bucket === "30-50%") return ytd >= 30 && ytd < 50;
   if (bucket === "50-75%") return ytd >= 50 && ytd < 75;
   if (bucket === "75-100%") return ytd >= 75 && ytd < 100;
-  if (bucket === "100%+") return ytd >= 100;
   return true;
 }
 
@@ -467,6 +467,7 @@ const state = {
   search: { query: "", loading: false, error: null, result: null, chart: null, chartLoading: false },
   originFilter: null,   // "Country" | "Sector" | "ETFs" | null (section 01 origin filter)
   returnBucketFilter: null, // "30-50%" | "50-75%" | "75-100%" | "100%+" | null (section 03 bucket filter)
+  returnSelectorSearch: "", // section 03 ticker search box — searches the whole section, independent of the bucket filter above
   momentumFilter: { foundation:null, all:null, etf1y:null, returnSelector:null, club:null, stars:null, green:null, red:null, month1:null, multi:null, search:null }, // "3 Ups" | "2 Ups" | "2 Downs" | "3 Downs" | null, per section
   showLeveraged: { etf1y: true }, // "Leveraged ETFs" toggle, per section — selected (true) by default, meaning ALL ETFs (including leveraged) are shown; deselecting hides leveraged funds
   sort: {                // per-table client-side sort: { key, dir } — click a column header to change
@@ -1088,17 +1089,29 @@ function render(){
         + '</tr>').join('')
     + '</tbody></table></div>';
 
-  const returnBucketBody = pillsHTML(RETURN_BUCKETS, state.returnBucketFilter, "returnBucket");
-  const returnRows = (state.stockReturnSelector || [])
-    .filter(r => matchesReturnBucket(state.returnBucketFilter, r.ytd))
-    .filter(r => matchesMomentumFilter(state.momentumFilter.returnSelector, r.w, r.m1, r.m2));
+  const returnBucketBody = '<div class="pills">'
+    + RETURN_BUCKETS.map(l =>
+        '<button class="pill'+(l===state.returnBucketFilter?' selected':'')+'" data-action="returnBucket" data-v="'+esc(l)+'">'+esc(l)+'</button>'
+      ).join('')
+    + '<input id="returnSelectorSearchInput" type="text" placeholder="Search ticker\u2026" value="' + esc(state.returnSelectorSearch || '') + '" '
+      + 'style="flex:1;min-width:120px;font-family:var(--mono);font-size:12px;padding:8px 12px;border:1.5px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);" />'
+    + '<button class="pill" data-action="returnSelectorSearch" style="border-color:var(--gold);background:var(--gold-soft);color:var(--teal);">Search</button>'
+    + '</div>';
+  const returnSearchQuery = (state.returnSelectorSearch || "").trim().toUpperCase();
+  const returnRows = returnSearchQuery
+    ? (state.stockReturnSelector || []).filter(r => r.t.toUpperCase().includes(returnSearchQuery))
+    : (state.stockReturnSelector || [])
+        .filter(r => matchesReturnBucket(state.returnBucketFilter, r.ytd, r.y1))
+        .filter(r => matchesMomentumFilter(state.momentumFilter.returnSelector, r.w, r.m1, r.m2));
   const returnSelectorBody =
     (returnRows.length
       ? '<div class="group-label">' + freshnessLabel() + '</div>'
-      : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
+      : returnSearchQuery
+        ? '<div class="group-label" style="color:var(--rust)">\u201c' + esc(returnSearchQuery) + '\u201d NOT FOUND IN THIS LIST</div>'
+        : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
     + returnBucketBody
     + momentumPillsHTML("returnSelector", state.momentumFilter.returnSelector)
-    + '<div class="note">US-tradable stocks (NYSE, Nasdaq, ADRs) up 30% or more year-to-date, price \u2265 $1. Pick a return band above, or leave unselected to see all.</div>'
+    + '<div class="note">US-tradable stocks (NYSE, Nasdaq, ADRs) up 30% or more year-to-date OR up 100% or more over the trailing 1 year, price \u2265 $1. Pick a return band above, search a ticker, or leave unselected to see all.</div>'
     + (returnRows.length
       ? '<div class="gwrap"><table class="gtable"><thead><tr>'
         + sortableTh("returnSelector","t","TICKER") + sortableTh("returnSelector","sector","SECTOR")
@@ -1418,11 +1431,15 @@ $("#refreshBtn").addEventListener("click", () => loadData(true));
 // keystroke) so it survives re-renders triggered by unrelated actions.
 document.addEventListener("input", e => {
   if (e.target && e.target.id === "searchInput") state.search.query = e.target.value;
+  else if (e.target && e.target.id === "returnSelectorSearchInput") state.returnSelectorSearch = e.target.value;
 });
 document.addEventListener("keydown", e => {
   if (e.key === "Enter" && e.target && e.target.id === "searchInput"){
     e.preventDefault();
     performSearch();
+  } else if (e.key === "Enter" && e.target && e.target.id === "returnSelectorSearchInput"){
+    e.preventDefault();
+    render();
   }
 });
 
