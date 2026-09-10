@@ -245,21 +245,6 @@ const ALL_TICKERS = [
 // rows in Base ETFs/Sectors, which isn't their purpose.
 const UNIQUE_TICKERS = [...new Set([...ALL_TICKERS.map(r=>r.t), "SPY", "IWM", "DIA"])];
 
-// Snapshot fallback for the 100%+ Club (S&P 500, mid-July 2026).
-const CLUB_FALLBACK = [
-  {t:"SNDK",n:"Sandisk Corporation",price:285.4,ytd:780},
-  {t:"MU",n:"Micron Technology",price:172.1,ytd:303},
-  {t:"INTC",n:"Intel Corporation",price:47.8,ytd:278},
-  {t:"WDC",n:"Western Digital",price:148.9,ytd:271},
-  {t:"STX",n:"Seagate Technology",price:262.3,ytd:250},
-  {t:"MRVL",n:"Marvell Technology",price:118.6,ytd:250},
-  {t:"DELL",n:"Dell Technologies",price:172.5,ytd:243},
-  {t:"GLW",n:"Corning",price:92.7,ytd:192},
-  {t:"AMAT",n:"Applied Materials",price:288.4,ytd:181},
-  {t:"AMD",n:"Advanced Micro Devices",price:245.6,ytd:171},
-  {t:"LITE",n:"Lumentum Holdings",price:197.3,ytd:131}
-];
-
 /* ================================================================ *
  *  DATA LAYER — Stooq free EOD history (no key), CORS-proxied.
  *  Cached per calendar day in localStorage so the app loads
@@ -309,32 +294,6 @@ async function fetchWithProxies(url){
   throw lastErr || new Error("all proxies failed");
 }
 
-/* ---- 100%+ Club: free full-market screen via stockanalysis.com ----
- * Free and keyless; covers all US-listed stocks (NYSE, Nasdaq, ADRs) with
- * end-of-day data. Endpoint is undocumented, so parsing is defensive and
- * the app falls back to the labeled snapshot if the shape ever changes. */
-const CLUB_URL = "https://stockanalysis.com/_api/endpoints/screener/data-points?type=s&ids=chYTD+ch1y+price";
-
-function parseClub(jsonText){
-  const j = JSON.parse(jsonText);
-  const map = (j && j.data && j.data.data) || {};
-  const bestOf = r => Math.max(isFinite(r.ytd) ? r.ytd : -Infinity, isFinite(r.y1) ? r.y1 : -Infinity);
-  const out = Object.entries(map)
-    .map(([t,v]) => ({ t:String(t).toUpperCase(), n:"", price:Number(v.price), ytd:Number(v.chYTD), y1:Number(v.ch1y) }))
-    .filter(r => isFinite(r.price) && r.price >= 1 && ((isFinite(r.ytd) && r.ytd >= 100) || (isFinite(r.y1) && r.y1 >= 100)))
-    .sort((a,b)=>bestOf(b)-bestOf(a))
-    .slice(0,50)
-    .map(r => ({ ...r, ytd: isFinite(r.ytd) ? +r.ytd.toFixed(2) : null, y1: isFinite(r.y1) ? +r.y1.toFixed(2) : null }));
-  return out;
-}
-
-async function fetchClub(){
-  const text = await fetchWithProxies(CLUB_URL);
-  const rows = parseClub(text);
-  if (!rows.length) throw new Error("no qualifying rows");
-  return rows;
-}
-
 /* ---- Fallback source: Anthropic API with web search ----
  * Used when direct feeds are unreachable (e.g. previewing inside Claude,
  * where outside requests are blocked). Returns real, current figures via
@@ -369,19 +328,6 @@ async function claudeFetchReturns(period){
   }
   if (!Object.keys(clean).length) throw new Error("empty");
   return clean;
-}
-
-async function claudeFetchClub(){
-  const parsed = await askClaudeJSON(
-    'Use web search to find stocks up 100% or more year-to-date OR up 100% or more over the trailing 1 year as of the latest close, share price at least $1.00, covering the whole universe a US retail investor can buy (NYSE, Nasdaq, S&P 500, Russell small caps, US-listed ADRs — not just the S&P 500). Reply with ONLY a raw JSON array like [{"t":"TICKER","n":"Name","price":12.3,"ytd":152.3,"y1":210.5}], sorted by whichever of ytd/y1 is higher, descending, top 25-30 confirmed names. No prose, no fences.'
-  );
-  const bestOf = r => Math.max(typeof r.ytd==="number"?r.ytd:-Infinity, typeof r.y1==="number"?r.y1:-Infinity);
-  const rows = (Array.isArray(parsed)?parsed:[])
-    .filter(r=>r && r.t && typeof r.price==="number" && r.price>=1 && ((typeof r.ytd==="number" && r.ytd>=100) || (typeof r.y1==="number" && r.y1>=100)))
-    .map(r=>({t:String(r.t).toUpperCase(),n:String(r.n||r.t),price:r.price,ytd: typeof r.ytd==="number"?+r.ytd.toFixed(2):null, y1: typeof r.y1==="number"?+r.y1.toFixed(2):null}))
-    .sort((a,b)=>bestOf(b)-bestOf(a));
-  if (!rows.length) throw new Error("empty");
-  return rows;
 }
 
 // Parse Stooq daily CSV -> [{d:Date, c:close}], oldest → newest.
@@ -444,8 +390,8 @@ async function fetchAllReturns(onProgress){
  *  STATE
  * ================================================================ */
 const state = {
-  expanded: { country:false, sector:false, foundation:false, all:false, returnSelector:false, club100:false, stars:false, green:false, red:false, month1:false, multi:false, search:false },
-  selected: { country:new Set(), sector:new Set(), foundation:new Set(), club100:new Set(), stars:new Set() },
+  expanded: { country:false, sector:false, foundation:false, all:false, returnSelector:false, stars:false, green:false, red:false, month1:false, multi:false, search:false },
+  selected: { country:new Set(), sector:new Set(), foundation:new Set(), stars:new Set() },
   family: "Schwab",
   timeframe: null,
   returns: {},         // ticker -> {asOf, price, 1M, 2M, ...}
@@ -453,9 +399,6 @@ const state = {
   fetchedAt: null,     // when we fetched
   loading: true,
   partial: 0,          // count of tickers that failed
-  club: null,
-  clubFetchedAt: null,
-  clubSource: null,    // 'screen' | 'search' | null
   source: null,        // 'stooq' | 'search' | null
   starGainers: null,   // [{t, price, ytd, stars}] from data.json
   allGreen: null,      // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
@@ -468,14 +411,13 @@ const state = {
   originFilter: null,   // "Country" | "Sector" | "ETFs" | null (section 01 origin filter)
   returnBucketFilter: null, // "30-50%" | "50-75%" | "75-100%" | "100%+" | null (section 03 bucket filter)
   returnSelectorSearch: "", // section 03 ticker search box — searches the whole section, independent of the bucket filter above
-  momentumFilter: { foundation:null, all:null, etf1y:null, returnSelector:null, club:null, stars:null, green:null, red:null, month1:null, multi:null, search:null }, // "3 Ups" | "2 Ups" | "2 Downs" | "3 Downs" | null, per section
+  momentumFilter: { foundation:null, all:null, etf1y:null, returnSelector:null, stars:null, green:null, red:null, month1:null, multi:null, search:null }, // "3 Ups" | "2 Ups" | "2 Downs" | "3 Downs" | null, per section
   showLeveraged: { etf1y: true }, // "Leveraged ETFs" toggle, per section — selected (true) by default, meaning ALL ETFs (including leveraged) are shown; deselecting hides leveraged funds
   sort: {                // per-table client-side sort: { key, dir } — click a column header to change
     all: { key: "ytd", dir: "desc" },
     returnSelector: { key: "y1", dir: "desc" },
     etf1y: { key: "y1", dir: "desc" },
     search: { key: "m3", dir: "desc" },
-    club: { key: "y1", dir: "desc" },
     stars: { key: "stars", dir: "desc" },
     green: { key: "y1", dir: "desc" },
     red: { key: "ytd", dir: "asc" },
@@ -524,7 +466,6 @@ const SEARCH_DATA_URLS = [
 function findListings(t){
   const labels = [];
   const inArr = arr => Array.isArray(arr) && arr.some(r => r.t === t);
-  if (inArr(state.club)) labels.push("100%+ Club");
   if (inArr(state.stockReturnSelector)) labels.push("Stock Return Selector");
   if (inArr(state.etf1YClub)) labels.push("ETFs above 100% 1Y");
   if (inArr(state.starGainers)) labels.push("Star Gainers");
@@ -1055,7 +996,6 @@ function render(){
     ...[...state.selected.country].map(t=>({t,g:"country"})),
     ...[...state.selected.sector].map(t=>({t,g:"sector"})),
     ...[...state.selected.foundation].map(t=>({t,g:"foundation"})),
-    ...[...state.selected.club100].map(t=>({t,g:"club100"})),
     ...[...state.selected.stars].map(t=>({t,g:"stars"}))
   ];
   $("#chips").innerHTML = chips.length
@@ -1151,29 +1091,6 @@ function render(){
             + '</tr>').join('')
         + '</tbody></table></div>'
       : '');
-
-  const clubRows = (state.club ?? CLUB_FALLBACK).filter(r => matchesMomentumFilter(state.momentumFilter.club, r.w, r.m1, r.m2));
-  const clubFresh = state.club
-    ? '<div class="group-label">' + freshnessLabel() + '</div>'
-    : '<div class="group-label" style="color:var(--rust)">SNAPSHOT · S&amp;P 500 · MID-JULY 2026 · LIVE SOURCES UNREACHABLE</div>';
-  const clubBody =
-    clubFresh
-    + momentumPillsHTML("club", state.momentumFilter.club)
-    + '<div class="note">US-tradable stocks (NYSE, Nasdaq, ADRs) up 100% or more year-to-date OR over the trailing 1 year, price ≥ $1, highest first.'
-    + (state.club ? ' End-of-day figures from a free full-market screen.' :
-       ' Tap refresh to retry the live screen.')
-    + '</div>'
-    + '<div class="gwrap"><table class="gtable"><thead><tr>'
-      + sortableTh("club","t","TICKER") + sortableTh("club","sector","SECTOR")
-      + sortableTh("club","day","TODAY","today-col") + sortableTh("club","w","5D") + sortableTh("club","m1","1M")
-      + sortableTh("club","m2","2M") + sortableTh("club","m3","3M") + sortableTh("club","m6","6M") + sortableTh("club","ytd","YTD") + sortableTh("club","y1","1Y")
-      + '</tr></thead><tbody>'
-    + sortRows(clubRows, state.sort.club.key, state.sort.club.dir).map(r =>
-        '<tr><td' + tickerClass(r.w, r.m1, r.m2) + '>' + esc(r.t) + '</td>'
-        + '<td title="' + esc(r.sector || '\u2014') + '" style="text-align:left;color:var(--ink-faint);font-size:10.5px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(r.sector || '\u2014') + '</td>'
-        + pctTd(r.day, 1, 'today-col') + pctTd(r.w, 1, periodCellClass(r.w, r.m1, r.m2, 'w')) + pctTd(r.m1, 1, periodCellClass(r.w, r.m1, r.m2, 'm1')) + pctTd(r.m2, 1, periodCellClass(r.w, r.m1, r.m2, 'm2')) + [r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
-        + '</tr>').join('')
-    + '</tbody></table></div>';
 
   const starRows = (state.starGainers || []).filter(r => matchesMomentumFilter(state.momentumFilter.stars, r.w, r.m1, r.m2));
   const starsBody =
@@ -1370,12 +1287,11 @@ function render(){
     + sectionHTML("returnSelector","03","Stock Return Selector", 0, returnSelectorBody)
     + sectionHTML("etf1y","04","ETFs above 100% 1Y", 0, etf1yBody)
     + sectionHTML("green","05","All Green All Year", 0, greenBody)
-    + sectionHTML("club100","06","The 100% Club YTD or 1Y", state.selected.club100.size, clubBody)
-    + sectionHTML("stars","07","Star Gainers", state.selected.stars.size, starsBody)
-    + sectionHTML("month1","08","1 Month Gainers", 0, month1Body)
-    + sectionHTML("multi","09","Tickers Listed Above Multiple Times", 0, multiBody)
-    + sectionHTML("red","10","Shorts - All Red All Year", 0, redBody)
-    + sectionHTML("search","11","Search", 0, searchBody)
+    + sectionHTML("stars","06","Star Gainers", state.selected.stars.size, starsBody)
+    + sectionHTML("month1","07","1 Month Gainers", 0, month1Body)
+    + sectionHTML("multi","08","Tickers Listed Above Multiple Times", 0, multiBody)
+    + sectionHTML("red","09","Shorts - All Red All Year", 0, redBody)
+    + sectionHTML("search","10","Search", 0, searchBody)
     + '<div class="spacer"></div>';
 }
 
@@ -1475,7 +1391,6 @@ async function loadData(force){
         returns: j.returns, dataAsOf: j.dataAsOf, partial: j.partial || 0,
         source: "static",
         fetchedAt: j.generatedAt ? new Date(j.generatedAt) : null,
-        club: j.club || null,
         starGainers: j.starGainers || null,
         allGreen: j.allGreen || null,
         allRed: j.allRed || null,
@@ -1483,8 +1398,6 @@ async function loadData(force){
         multiListed: j.multiListed || null,
         etf1YClub: j.etf1YClub || null,
         stockReturnSelector: j.stockReturnSelector || null,
-        clubSource: j.club ? (j.clubSource || "screen") : null,
-        clubFetchedAt: j.generatedAt ? new Date(j.generatedAt) : null,
         loading: false
       });
       render();
@@ -1500,8 +1413,6 @@ async function loadData(force){
       dataAsOf: cached.dataAsOf, source: cached.source,
       fetchedAt: cached.fetchedAt ? new Date(cached.fetchedAt) : null,
       partial: cached.partial || 0,
-      club: cached.club || null, clubSource: cached.clubSource || null,
-      clubFetchedAt: cached.clubFetchedAt ? new Date(cached.clubFetchedAt) : null,
       loading: false
     });
     render();
@@ -1533,11 +1444,6 @@ async function loadData(force){
     }
   } catch {}
 
-  if (probeOk) try {
-    const rows = await fetchClub();
-    state.club = rows; state.clubSource = "screen"; state.clubFetchedAt = new Date();
-  } catch { state.club = null; state.clubSource = null; }
-
   /* --- Fallback: web search via the Anthropic API (works in preview) --- */
   if (!stooqOk){
     $("#freshness").textContent = "Direct feed blocked — fetching latest close via web search…";
@@ -1546,21 +1452,12 @@ async function loadData(force){
       state.source = "search";
     } catch { state.source = null; }
   }
-  if (!state.club){
-    try {
-      state.club = await claudeFetchClub();
-      state.clubSource = "search"; state.clubFetchedAt = new Date();
-    } catch {}
-  }
-
-  if (state.source || state.club) state.fetchedAt = new Date();
+    if (state.source) state.fetchedAt = new Date();
   saveCache({
     source: state.source, returns: state.returns, searchReturns: state.searchReturns,
     dataAsOf: state.dataAsOf,
     fetchedAt: state.fetchedAt ? state.fetchedAt.toISOString() : null,
     partial: state.partial,
-    club: state.club, clubSource: state.clubSource,
-    clubFetchedAt: state.clubFetchedAt ? state.clubFetchedAt.toISOString() : null
   });
   state.loading = false;
   state.loadProgress = "";
