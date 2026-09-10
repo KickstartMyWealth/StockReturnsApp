@@ -1096,6 +1096,7 @@ function render(){
     + '<input id="returnSelectorSearchInput" type="text" placeholder="Search ticker\u2026" value="' + esc(state.returnSelectorSearch || '') + '" '
       + 'style="flex:1;min-width:120px;font-family:var(--mono);font-size:12px;padding:8px 12px;border:1.5px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);" />'
     + '<button class="pill" data-action="returnSelectorSearch" style="border-color:var(--gold);background:var(--gold-soft);color:var(--teal);">Search</button>'
+    + '<button class="pill" data-action="returnSelectorClear">Clear</button>'
     + '</div>';
   const returnSearchQuery = (state.returnSelectorSearch || "").trim().toUpperCase();
   const returnRows = returnSearchQuery
@@ -1330,6 +1331,7 @@ function render(){
     + '<input id="searchInput" type="text" placeholder="e.g. ServiceNow or NOW" value="' + esc(state.search.query || '') + '" '
       + 'style="flex:1;min-width:0;font-family:var(--mono);font-size:13px;padding:8px 12px;border:1.5px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);" />'
     + '<button class="pill" data-action="doSearch" style="border-color:var(--gold);background:var(--gold-soft);color:var(--teal);flex-shrink:0;">Search</button>'
+    + '<button class="pill" data-action="clearSearch" style="flex-shrink:0;">Clear</button>'
     + '</div>'
     + (state.search.loading ? '<div class="note">Searching…</div>' : '')
     + (state.search.error ? '<div class="note warn">' + esc(state.search.error) + '</div>' : '')
@@ -1392,6 +1394,8 @@ document.addEventListener("click", e => {
   if (a === "doSearch"){
     performSearch();
     return;
+  } else if (a === "clearSearch"){
+    state.search = { query: "", loading: false, error: null, result: null, chart: null, chartLoading: false };
   } else if (a === "timeframe"){
     state.timeframe = state.timeframe === el.dataset.v ? null : el.dataset.v;
     ensurePeriod();
@@ -1400,6 +1404,8 @@ document.addEventListener("click", e => {
   } else if (a === "returnBucket"){
     state.returnBucketFilter = state.returnBucketFilter === el.dataset.v ? null : el.dataset.v;
     state.sort.returnSelector = { key: "y1", dir: "desc" };
+  } else if (a === "returnSelectorClear"){
+    state.returnSelectorSearch = "";
   } else if (a === "momentumFilter"){
     const msec = el.dataset.tbl;
     state.momentumFilter[msec] = state.momentumFilter[msec] === el.dataset.v ? null : el.dataset.v;
