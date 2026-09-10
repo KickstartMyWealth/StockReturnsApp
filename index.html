@@ -155,13 +155,13 @@ const ORIGIN_KEY = { Country: "country", Sector: "sector", ETFs: "foundation" };
 
 // Section 03 "Stock Return Selector" buckets stocks by YTD return band.
 const RETURN_BUCKETS = ["30-50%", "50-75%", "75-100%", "100%+"];
-function matchesReturnBucket(bucket, ytd, y1){
+function matchesReturnBucket(bucket, y1){
   if (!bucket) return true;
-  if (bucket === "100%+") return (ytd != null && ytd >= 100) || (y1 != null && y1 >= 100);
-  if (ytd == null) return false;
-  if (bucket === "30-50%") return ytd >= 30 && ytd < 50;
-  if (bucket === "50-75%") return ytd >= 50 && ytd < 75;
-  if (bucket === "75-100%") return ytd >= 75 && ytd < 100;
+  if (y1 == null) return false;
+  if (bucket === "30-50%") return y1 >= 30 && y1 < 50;
+  if (bucket === "50-75%") return y1 >= 50 && y1 < 75;
+  if (bucket === "75-100%") return y1 >= 75 && y1 < 100;
+  if (bucket === "100%+") return y1 >= 100;
   return true;
 }
 
@@ -1101,7 +1101,7 @@ function render(){
   const returnRows = returnSearchQuery
     ? (state.stockReturnSelector || []).filter(r => r.t.toUpperCase().includes(returnSearchQuery))
     : (state.stockReturnSelector || [])
-        .filter(r => matchesReturnBucket(state.returnBucketFilter, r.ytd, r.y1))
+        .filter(r => matchesReturnBucket(state.returnBucketFilter, r.y1))
         .filter(r => matchesMomentumFilter(state.momentumFilter.returnSelector, r.w, r.m1, r.m2));
   const returnSelectorBody =
     (returnRows.length
@@ -1111,7 +1111,7 @@ function render(){
         : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
     + returnBucketBody
     + momentumPillsHTML("returnSelector", state.momentumFilter.returnSelector)
-    + '<div class="note">US-tradable stocks (NYSE, Nasdaq, ADRs) up 30% or more year-to-date OR up 100% or more over the trailing 1 year, price \u2265 $1. Pick a return band above, search a ticker, or leave unselected to see all.</div>'
+    + '<div class="note">US-tradable stocks (NYSE, Nasdaq, ADRs) up 30% or more over the trailing 1 year, price \u2265 $1. Pick a return band above, search a ticker, or leave unselected to see all.</div>'
     + (returnRows.length
       ? '<div class="gwrap"><table class="gtable"><thead><tr>'
         + sortableTh("returnSelector","t","TICKER") + sortableTh("returnSelector","sector","SECTOR")
