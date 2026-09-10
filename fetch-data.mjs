@@ -263,26 +263,21 @@ async function main() {
       }));
     if (!oneMonthGainers.length) oneMonthGainers = null;
 
-    // ---- Stock Return Selector: full-market stock screen, YTD >= 30% OR
-    // 1Y >= 100%, for section 03's 30-50/50-75/75-100/100%+ button filters.
-    // The OR-on-1Y clause exists so a stock with a huge trailing-1Y run but
-    // a modest YTD (it ran up last year, not this year) still qualifies —
-    // matching how the 100% Club also accepts either metric. No top-N cap:
-    // every qualifying stock is included, same as the Club/Green/Red lists.
+    // ---- Stock Return Selector: full-market stock screen, 1Y >= 30%, for
+    // section 03's 30-50/50-75/75-100/100%+ button filters. Entry and every
+    // bucket are based on 1-year return only (not YTD) — consistent across
+    // the whole section. No top-N cap: every qualifying stock is included,
+    // same as the Club/Green/Red lists.
     stockReturnSelector = Object.entries(map)
       .map(([t, v]) => ({ t, sector: v.sector || null, price: P(v.price), w: P(v.ch1w), m1: P(v.ch1m), m3: P(v.ch3m), m6: P(v.ch6m), ytd: P(v.chYTD), y1: P(v.ch1y), day: P(v.change), volume: Number(v.volume) }))
-      .filter(r => r.price >= 1
-        && ((r.ytd != null && r.ytd >= 30 && r.ytd <= YTD_SANITY_CAP) || (r.y1 != null && r.y1 >= 100 && r.y1 <= CLUB_Y1_SANITY_CAP))
+      .filter(r => r.price >= 1 && r.y1 != null && r.y1 >= 30 && r.y1 <= CLUB_Y1_SANITY_CAP
         && Number.isFinite(r.volume) && r.volume >= MIN_VOLUME)
-      .sort((a, b) => {
-        const bestOf = r => Math.max(r.ytd ?? -Infinity, r.y1 ?? -Infinity);
-        return bestOf(b) - bestOf(a);
-      })
+      .sort((a, b) => b.y1 - a.y1)
       .map(({ volume, ...r }) => ({
         ...r, price: +r.price.toFixed(2),
         w: r.w != null ? +r.w.toFixed(1) : null, m1: r.m1 != null ? +r.m1.toFixed(1) : null,
         m3: r.m3 != null ? +r.m3.toFixed(1) : null, m6: r.m6 != null ? +r.m6.toFixed(1) : null,
-        ytd: r.ytd != null ? +r.ytd.toFixed(1) : null, y1: r.y1 != null ? +r.y1.toFixed(1) : null,
+        ytd: r.ytd != null ? +r.ytd.toFixed(1) : null, y1: +r.y1.toFixed(1),
         day: r.day != null ? +r.day.toFixed(1) : null,
       }));
     if (!stockReturnSelector.length) stockReturnSelector = null;
