@@ -470,7 +470,7 @@ const state = {
   momentumFilter: { foundation:null, all:null, etf1y:null, returnSelector:null, club:null, stars:null, green:null, red:null, month1:null, multi:null, search:null }, // "3 Ups" | "2 Ups" | "2 Downs" | "3 Downs" | null, per section
   showLeveraged: { etf1y: true }, // "Leveraged ETFs" toggle, per section — selected (true) by default, meaning ALL ETFs (including leveraged) are shown; deselecting hides leveraged funds
   sort: {                // per-table client-side sort: { key, dir } — click a column header to change
-    all: { key: "m1", dir: "desc" },
+    all: { key: "ytd", dir: "desc" },
     returnSelector: { key: "ytd", dir: "desc" },
     etf1y: { key: "y1", dir: "desc" },
     search: { key: "m3", dir: "desc" },
@@ -1075,7 +1075,7 @@ function render(){
     '<div class="group-label">' + freshnessLabel() + '</div>'
     + originBody
     + momentumPillsHTML("all", state.momentumFilter.all)
-    + '<div class="note">Country, sector, and foundation ETFs. Default sort is by 1M return \u2014 tap any column to sort by it instead, or a filter above to narrow by type.</div>'
+    + '<div class="note">Country, sector, and foundation ETFs. Default sort is by YTD return \u2014 tap any column to sort by it instead, or a filter above to narrow by type.</div>'
     + '<div class="gwrap"><table class="gtable"><thead><tr>'
       + sortableTh("all","t","TICKER") + sortableTh("all","n","NAME")
       + sortableTh("all","day","TODAY","today-col") + sortableTh("all","w","5D") + sortableTh("all","m1","1M")
