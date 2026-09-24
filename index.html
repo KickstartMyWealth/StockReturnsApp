@@ -391,7 +391,7 @@ async function fetchAllReturns(onProgress){
  *  STATE
  * ================================================================ */
 const state = {
-  expanded: { country:false, sector:false, foundation:false, all:false, returnSelector:false, stars:false, green:false, red:false, month1:false, multi:false, search:false },
+  expanded: { country:false, sector:false, foundation:false, all:false, returnSelector:false, stars:false, red:false, month1:false, multi:false, search:false },
   selected: { country:new Set(), sector:new Set(), foundation:new Set(), stars:new Set() },
   family: "Schwab",
   timeframe: null,
@@ -413,13 +413,12 @@ const state = {
   returnBucketFilter: null, // "30-50%" | "50-75%" | "75-100%" | "100%+" | null (section 03 bucket filter)
   returnSelectorSearch: "", // section 03 ticker search box — searches the whole section, independent of the bucket filter above
   returnSelectorEtfFilter: null, // null | "etfs" | "leveraged" | "green" — section 03's category filter; null merges stocks + ETFs + All Green All Year stocks, deduped by ticker (default)
-  momentumFilter: { foundation:null, all:null, returnSelector:null, stars:null, green:null, red:null, month1:null, multi:null, search:null }, // "3 Ups" | "2 Ups" | "2 Downs" | "3 Downs" | null, per section
+  momentumFilter: { foundation:null, all:null, returnSelector:null, stars:null, red:null, month1:null, multi:null, search:null }, // "3 Ups" | "2 Ups" | "2 Downs" | "3 Downs" | null, per section
   sort: {                // per-table client-side sort: { key, dir } — click a column header to change
     all: { key: "y1", dir: "desc" },
     returnSelector: { key: "y1", dir: "desc" },
     search: { key: "m3", dir: "desc" },
     stars: { key: "stars", dir: "desc" },
-    green: { key: "y1", dir: "desc" },
     red: { key: "ytd", dir: "asc" },
     month1: { key: "m1", dir: "desc" },
     multi: { key: "count", dir: "desc" },
@@ -1122,7 +1121,7 @@ function render(){
       ? '<div class="group-label">' + freshnessLabel() + '</div>'
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
     + momentumPillsHTML("stars", state.momentumFilter.stars)
-    + '<div class="note">Stocks setting new 52-week highs (WSJ new-highs style). Every day a stock makes a new high adds a star, up to ★★★★★ \u2014 stars are cumulative and never reset, even after a missed day. Date shown is when the star was last added.</div>'
+    + '<div class="note">Stocks setting new 52-week highs (WSJ new-highs style). Every day a stock makes a new high adds a star, up to ★★★★★★★ \u2014 stars are cumulative and never reset, even after a missed day. Date shown is when the star was last added.</div>'
     + '<div class="gwrap"><table class="gtable"><thead><tr>'
       + sortableTh("stars","t","TICKER") + sortableTh("stars","sector","SECTOR")
       + sortableTh("stars","stars","STARS") + sortableTh("stars","day","TODAY","today-col") + sortableTh("stars","w","5D")
@@ -1132,31 +1131,10 @@ function render(){
     + sortRows(starRows, state.sort.stars.key, state.sort.stars.dir).map(r =>
         '<tr><td' + tickerClass(r.w, r.m1, r.m2) + '>' + esc(r.t) + '</td>'
         + '<td title="' + esc(r.sector || '\u2014') + '" style="text-align:left;color:var(--ink-faint);font-size:10.5px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(r.sector || '\u2014') + '</td>'
-        + '<td>' + "\u2605".repeat(Math.min(r.stars||1,5)) + (r.since?' \u00b7 '+fmtDate(r.since):'') + '</td>'
+        + '<td>' + "\u2605".repeat(Math.min(r.stars||1,7)) + (r.since?' \u00b7 '+fmtDate(r.since):'') + '</td>'
         + pctTd(r.day, 1, 'today-col') + pctTd(r.w, 1, periodCellClass(r.w, r.m1, r.m2, 'w')) + pctTd(r.m1, 1, periodCellClass(r.w, r.m1, r.m2, 'm1')) + pctTd(r.m2, 1, periodCellClass(r.w, r.m1, r.m2, 'm2')) + [r.m3, r.m6, r.m9, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
         + '</tr>').join('')
     + '</tbody></table></div>';
-  const greenRows = (state.allGreen || []).filter(r => matchesMomentumFilter(state.momentumFilter.green, r.w, r.m1, r.m2));
-  const greenBody =
-    (greenRows.length
-      ? '<div class="group-label">' + freshnessLabel() + '</div>'
-      : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
-    + momentumPillsHTML("green", state.momentumFilter.green)
-    + '<div class="note">Stocks green in all six windows \u2014 5-day, 1-month, 3-month, 6-month, YTD, and 1-year \u2014 price \u2265 $1. Top 50 by 1-year return.</div>'
-    + (greenRows.length
-      ? '<div class="gwrap"><table class="gtable"><thead><tr>'
-        + sortableTh("green","t","TICKER") + sortableTh("green","sector","SECTOR")
-        + sortableTh("green","day","TODAY","today-col") + sortableTh("green","w","5D") + sortableTh("green","m1","1M")
-        + sortableTh("green","m2","2M") + sortableTh("green","m3","3M") + sortableTh("green","m6","6M") + sortableTh("green","m9","9M") + sortableTh("green","ytd","YTD") + sortableTh("green","y1","1Y")
-        + '</tr></thead><tbody>'
-        + sortRows(greenRows, state.sort.green.key, state.sort.green.dir).map(r =>
-            '<tr><td' + tickerClass(r.w, r.m1, r.m2) + '>' + esc(r.t) + '</td>'
-            + '<td title="' + esc(r.sector || '\u2014') + '" style="text-align:left;color:var(--ink-faint);font-size:10.5px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(r.sector || '\u2014') + '</td>'
-            + pctTd(r.day, 1, 'today-col') + pctTd(r.w, 1, periodCellClass(r.w, r.m1, r.m2, 'w')) + pctTd(r.m1, 1, periodCellClass(r.w, r.m1, r.m2, 'm1')) + pctTd(r.m2, 1, periodCellClass(r.w, r.m1, r.m2, 'm2')) + [r.m3, r.m6, r.m9, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
-            + '</tr>').join('')
-        + '</tbody></table></div>'
-      : '');
-
   const redRows = (state.allRed || []).filter(r => matchesMomentumFilter(state.momentumFilter.red, r.w, r.m1, r.m2));
   const redBody =
     (redRows.length
@@ -1309,12 +1287,11 @@ function render(){
       sectionHTML("foundation","01","Foundation ETFs", 0, foundationBody)
     + sectionHTML("all","02","Base ETFs, Country, Sectors", 0, allBody)
     + sectionHTML("returnSelector","03","Stock Return Selector", 0, returnSelectorBody)
-    + sectionHTML("green","04","All Green All Year", 0, greenBody)
-    + sectionHTML("stars","05","Star Gainers", state.selected.stars.size, starsBody)
-    + sectionHTML("month1","06","1 Month Gainers", 0, month1Body)
-    + sectionHTML("multi","07","Tickers Listed Above Multiple Times", 0, multiBody)
-    + sectionHTML("red","08","Shorts - All Red All Year", 0, redBody)
-    + sectionHTML("search","09","Search", 0, searchBody)
+    + sectionHTML("stars","04","Star Gainers", state.selected.stars.size, starsBody)
+    + sectionHTML("month1","05","1 Month Gainers", 0, month1Body)
+    + sectionHTML("multi","06","Tickers Listed Above Multiple Times", 0, multiBody)
+    + sectionHTML("red","07","Shorts - All Red All Year", 0, redBody)
+    + sectionHTML("search","08","Search", 0, searchBody)
     + '<div class="spacer"></div>';
 }
 
