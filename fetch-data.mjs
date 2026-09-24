@@ -300,6 +300,12 @@ async function main() {
       allGreen = allGreen.filter(r => r.m2 != null && r.m2 > 0);
       if (!allGreen.length) allGreen = null;
     }
+    // Same fix, mirrored: "Shorts - All Red All Year" should be red across
+    // every window too, including 2M, for the identical reason above.
+    if (allRed) {
+      allRed = allRed.filter(r => r.m2 != null && r.m2 < 0);
+      if (!allRed.length) allRed = null;
+    }
 
     // ---- Tickers Listed Above Multiple Times: appears in 2+ of the four
     // bullish lists (Club, Star Gainers, All Green, 1 Month Gainers).
