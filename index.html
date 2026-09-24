@@ -1308,6 +1308,7 @@ document.addEventListener("click", e => {
     state.momentumFilter[msec] = state.momentumFilter[msec] === el.dataset.v ? null : el.dataset.v;
   } else if (a === "returnSelectorEtfFilter"){
     state.returnSelectorEtfFilter = state.returnSelectorEtfFilter === el.dataset.v ? null : el.dataset.v;
+    state.sort.returnSelector = { key: state.returnSelectorEtfFilter === "month1" ? "m1" : "y1", dir: "desc" };
   } else if (a === "sortCol"){
     const section = el.dataset.tbl, key = el.dataset.key;
     const cur = state.sort[section];
