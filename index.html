@@ -412,7 +412,7 @@ const state = {
   originFilter: null,   // "Country" | "Sector" | "ETFs" | null (section 01 origin filter)
   returnBucketFilter: null, // "30-50%" | "50-75%" | "75-100%" | "100%+" | null (section 03 bucket filter)
   returnSelectorSearch: "", // section 03 ticker search box — searches the whole section, independent of the bucket filter above
-  returnSelectorEtfFilter: null, // null | "etfs" | "leveraged" — section 03's ETF filter; null merges stocks + all ETFs (default)
+  returnSelectorEtfFilter: null, // null | "etfs" | "leveraged" | "green" — section 03's category filter; null merges stocks + ETFs + All Green All Year stocks, deduped by ticker (default)
   momentumFilter: { foundation:null, all:null, returnSelector:null, stars:null, green:null, red:null, month1:null, multi:null, search:null }, // "3 Ups" | "2 Ups" | "2 Downs" | "3 Downs" | null, per section
   sort: {                // per-table client-side sort: { key, dir } — click a column header to change
     all: { key: "y1", dir: "desc" },
@@ -1065,13 +1065,25 @@ function render(){
   // list. All three states still respect the return-band buckets and
   // momentum filter below.
   const etfPoolRows = state.etf1YClub || [];
+  const greenPoolRows = state.allGreen || [];
   let returnBaseList;
   if (state.returnSelectorEtfFilter === "etfs"){
     returnBaseList = etfPoolRows;
   } else if (state.returnSelectorEtfFilter === "leveraged"){
     returnBaseList = etfPoolRows.filter(r => isLeveragedName(r.n));
+  } else if (state.returnSelectorEtfFilter === "green"){
+    returnBaseList = greenPoolRows;
   } else {
-    returnBaseList = [...(state.stockReturnSelector || []), ...etfPoolRows];
+    // Stocks + ETFs + All Green stocks can genuinely overlap on the same
+    // ticker (unlike ETFs, All Green is itself a stock list), so dedupe
+    // by ticker here — first list wins — to avoid showing a stock twice.
+    const seen = new Set();
+    returnBaseList = [];
+    for (const r of [...(state.stockReturnSelector || []), ...etfPoolRows, ...greenPoolRows]){
+      if (seen.has(r.t)) continue;
+      seen.add(r.t);
+      returnBaseList.push(r);
+    }
   }
   const returnRows = returnSearchQuery
     ? returnBaseList.filter(r => r.t.toUpperCase().includes(returnSearchQuery))
@@ -1087,8 +1099,9 @@ function render(){
     + returnBucketBody
     + momentumPillsHTML("returnSelector", state.momentumFilter.returnSelector)
     + '<div class="pills"><button class="pill' + (state.returnSelectorEtfFilter === "etfs" ? ' selected' : '') + '" data-action="returnSelectorEtfFilter" data-v="etfs">ETFs</button>'
-      + '<button class="pill' + (state.returnSelectorEtfFilter === "leveraged" ? ' selected' : '') + '" data-action="returnSelectorEtfFilter" data-v="leveraged">Leveraged ETFs</button></div>'
-    + '<div class="note">US-tradable stocks and ETFs (NYSE, Nasdaq, ADRs) up 30% or more over the trailing 1 year, price \u2265 $1 \u2014 stocks and ETFs (including leveraged funds) are shown together by default. Pick ETFs or Leveraged ETFs above to narrow to just those, pick a return band, search a ticker, or leave unselected to see all.</div>'
+      + '<button class="pill' + (state.returnSelectorEtfFilter === "leveraged" ? ' selected' : '') + '" data-action="returnSelectorEtfFilter" data-v="leveraged">Leveraged ETFs</button>'
+      + '<button class="pill' + (state.returnSelectorEtfFilter === "green" ? ' selected' : '') + '" data-action="returnSelectorEtfFilter" data-v="green">All Green All Year</button></div>'
+    + '<div class="note">US-tradable stocks and ETFs (NYSE, Nasdaq, ADRs) up 30% or more over the trailing 1 year, price \u2265 $1 \u2014 stocks and ETFs (including leveraged funds) are shown together by default. Pick ETFs, Leveraged ETFs, or All Green All Year above to narrow to just those, pick a return band, search a ticker, or leave unselected to see all.</div>'
     + (returnRows.length
       ? '<div class="gwrap"><table class="gtable"><thead><tr>'
         + sortableTh("returnSelector","t","TICKER") + sortableTh("returnSelector","sector","SECTOR")
