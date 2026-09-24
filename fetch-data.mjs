@@ -289,21 +289,22 @@ async function main() {
     // spread-copied rows (below) inherit m2 along with everything else.
     await attachExtraReturns([club, starGainers, allGreen, allRed, oneMonthGainers, stockReturnSelector]);
 
-    // "All Green" is meant to be green across every window, but 2M isn't
-    // available until the attach step above (it needs its own per-ticker
-    // history fetch, unlike the other 6 fields which come free from the
-    // initial screener call) — so a stock can pass the original 6-window
-    // filter and still turn out negative on 2M once that's attached. This
-    // second pass removes any such row, so the final list is genuinely
-    // green across all seven windows: 5D, 1M, 2M, 3M, 6M, YTD, 1Y.
+    // "All Green" is meant to be green across every window, but 2M and 9M
+    // aren't available until the attach step above (they need their own
+    // per-ticker history fetch, unlike the other 6 fields which come free
+    // from the initial screener call) — so a stock can pass the original
+    // 6-window filter and still turn out negative on 2M or 9M once those
+    // are attached. This second pass removes any such row, so the final
+    // list is genuinely green across all eight windows: 5D, 1M, 2M, 3M,
+    // 6M, 9M, YTD, 1Y.
     if (allGreen) {
-      allGreen = allGreen.filter(r => r.m2 != null && r.m2 > 0);
+      allGreen = allGreen.filter(r => r.m2 != null && r.m2 > 0 && r.m9 != null && r.m9 > 0);
       if (!allGreen.length) allGreen = null;
     }
     // Same fix, mirrored: "Shorts - All Red All Year" should be red across
-    // every window too, including 2M, for the identical reason above.
+    // every window too, including 2M and 9M, for the identical reason above.
     if (allRed) {
-      allRed = allRed.filter(r => r.m2 != null && r.m2 < 0);
+      allRed = allRed.filter(r => r.m2 != null && r.m2 < 0 && r.m9 != null && r.m9 < 0);
       if (!allRed.length) allRed = null;
     }
 
