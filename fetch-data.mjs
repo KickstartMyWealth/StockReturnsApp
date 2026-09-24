@@ -289,6 +289,18 @@ async function main() {
     // spread-copied rows (below) inherit m2 along with everything else.
     await attachExtraReturns([club, starGainers, allGreen, allRed, oneMonthGainers, stockReturnSelector]);
 
+    // "All Green" is meant to be green across every window, but 2M isn't
+    // available until the attach step above (it needs its own per-ticker
+    // history fetch, unlike the other 6 fields which come free from the
+    // initial screener call) — so a stock can pass the original 6-window
+    // filter and still turn out negative on 2M once that's attached. This
+    // second pass removes any such row, so the final list is genuinely
+    // green across all seven windows: 5D, 1M, 2M, 3M, 6M, YTD, 1Y.
+    if (allGreen) {
+      allGreen = allGreen.filter(r => r.m2 != null && r.m2 > 0);
+      if (!allGreen.length) allGreen = null;
+    }
+
     // ---- Tickers Listed Above Multiple Times: appears in 2+ of the four
     // bullish lists (Club, Star Gainers, All Green, 1 Month Gainers).
     // Shorts/All Red is intentionally excluded — it's a bearish list, not
