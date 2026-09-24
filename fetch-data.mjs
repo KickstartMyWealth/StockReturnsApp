@@ -191,7 +191,7 @@ async function main() {
     const todayET = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
     const sameDay = prev.day === todayET; // rerun guard: don't double-increment
     // Cumulative, never resets: a star is added on any day a stock sets a new
-    // 52-week high, up to 5 total. Missed days simply don't add a star; they
+    // 52-week high, up to 7 total. Missed days simply don't add a star; they
 
     // don't remove one. "since" tracks the most recent date a star was added.
 
@@ -208,7 +208,7 @@ async function main() {
         // Rerun guard: carry forward unchanged, don't double-count today.
         if (prevStars) { newStars[t] = prevStars; newSince[t] = prev.since[t] || prev.day || todayET; }
       } else if (madeHigh) {
-        newStars[t] = Math.min(prevStars + 1, 5);
+        newStars[t] = Math.min(prevStars + 1, 7);
         newSince[t] = todayET; // date this star was added
       } else if (prevStars) {
         newStars[t] = prevStars;          // carry forward, no new star today
