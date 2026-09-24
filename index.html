@@ -391,7 +391,7 @@ async function fetchAllReturns(onProgress){
  *  STATE
  * ================================================================ */
 const state = {
-  expanded: { country:false, sector:false, foundation:false, all:false, returnSelector:false, stars:false, red:false, multi:false, search:false },
+  expanded: { country:false, sector:false, foundation:false, all:false, returnSelector:false, stars:false, red:false, multi:false },
   selected: { country:new Set(), sector:new Set(), foundation:new Set(), stars:new Set() },
   family: "Schwab",
   timeframe: null,
@@ -411,7 +411,6 @@ const state = {
   search: { query: "", loading: false, error: null, result: null, chart: null, chartLoading: false },
   originFilter: null,   // "Country" | "Sector" | "ETFs" | null (section 01 origin filter)
   returnBucketFilter: null, // "30-50%" | "50-75%" | "75-100%" | "100%+" | null (section 03 bucket filter)
-  returnSelectorSearch: "", // section 03 ticker search box — searches the whole section, independent of the bucket filter above
   returnSelectorEtfFilter: null, // null | "etfs" | "leveraged" | "green" | "month1" — section 03's category filter; null merges stocks + ETFs + All Green + 1M Gainers stocks, deduped by ticker (default)
   momentumFilter: { foundation:null, all:null, returnSelector:null, stars:null, red:null, multi:null, search:null }, // "3 Ups" | "2 Ups" | "2 Downs" | "3 Downs" | null, per section
   sort: {                // per-table client-side sort: { key, dir } — click a column header to change
@@ -1046,18 +1045,76 @@ function render(){
         + '</tr>').join('')
     + '</tbody></table></div>';
 
+  const sr = state.search.result;
+  const srFiltered = sr ? sr.filter(r => matchesMomentumFilter(state.momentumFilter.search, r.w, r.m1, r.m2)) : sr;
+  // Fixed reference set shown below the search results so any searched
+  // ticker can be compared directly against these four major indices —
+  // same tickers/labels as the chart's benchmark lines above, sourced from
+  // this app's own tracked-ticker data (state.returns) rather than a
+  // second live lookup, for the same reason Search prefers batch data.
+  const searchBenchmarks = BENCHMARKS.map(b => {
+    const batch = state.returns[b.key];
+    return {
+      t: b.key, n: b.label, price: batch?.price ?? null,
+      day: batch?.["1D"] ?? null, w: batch?.["5D"] ?? null, m1: batch?.["1M"] ?? null,
+      m2: batch?.["2M"] ?? null, m3: batch?.["3M"] ?? null, m6: batch?.["6M"] ?? null, m9: batch?.["9M"] ?? null,
+      ytd: batch?.["YTD"] ?? null, y1: batch?.["1Y"] ?? null,
+      inLists: findListings(b.key)
+    };
+  });
+  const verdict = benchmarkVerdict(sr && sr.length ? sr[0] : null, state.returns["SPY"]);
+  const verdictLabel = { all:"BEATS BENCHMARKS", some:"SOMETIMES BEATS BENCHMARKS", none:"DOES NOT BEAT BENCHMARKS" }[verdict];
+  const verdictColor = { all:"#16A34A", some:"#F97316", none:"#DC2626" }[verdict];
+  const verdictHTML = verdict
+    ? '<div style="font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:1px;color:' + verdictColor + ';padding-bottom:6px;">' + verdictLabel + '</div>'
+    : '';
+  const searchBody =
+    '<div class="group-label">LIVE SEARCH</div>'
+    + '<div class="note">Search any US-listed stock or ETF by ticker or company name. Companies with multiple share classes (e.g. Alphabet\u2019s GOOGL/GOOG) return every class.</div>'
+    + verdictHTML
+    + '<div class="pills" style="align-items:center;flex-wrap:nowrap;">'
+    + '<input id="searchInput" type="text" placeholder="e.g. ServiceNow or NOW" value="' + esc(state.search.query || '') + '" '
+      + 'style="flex:1;min-width:0;font-family:var(--mono);font-size:13px;padding:8px 12px;border:1.5px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);" />'
+    + '<button class="pill" data-action="doSearch" style="border-color:var(--gold);background:var(--gold-soft);color:var(--teal);flex-shrink:0;">Search</button>'
+    + '<button class="pill" data-action="clearSearch" style="flex-shrink:0;">Clear</button>'
+    + '</div>'
+    + (state.search.loading ? '<div class="note">Searching…</div>' : '')
+    + (state.search.error ? '<div class="note warn">' + esc(state.search.error) + '</div>' : '')
+    + (sr && sr.length ? momentumPillsHTML("search", state.momentumFilter.search) : '')
+    + (sr && sr.length
+      ? '<div class="group-label">' + srFiltered.length + (srFiltered.length === 1 ? ' MATCH' : ' MATCHES') + '</div>'
+        + '<div class="gwrap"><table class="gtable"><thead><tr>'
+          + sortableTh("search","t","TICKER") + sortableTh("search","n","NAME") + '<th>IN</th>'
+          + sortableTh("search","price","PRICE")
+          + sortableTh("search","day","TODAY","today-col") + sortableTh("search","w","5D") + sortableTh("search","m1","1M")
+          + sortableTh("search","m2","2M") + sortableTh("search","m3","3M") + sortableTh("search","m6","6M") + sortableTh("search","m9","9M") + sortableTh("search","ytd","YTD") + sortableTh("search","y1","1Y")
+          + '</tr></thead><tbody>'
+        + sortRows(srFiltered, state.sort.search.key, state.sort.search.dir).map(r =>
+            '<tr><td' + tickerClass(r.w, r.m1, r.m2) + '>' + esc(r.t) + '</td>'
+            + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.n) + '</td>'
+            + '<td style="text-align:left;color:var(--ink-faint);font-size:9.5px;">' + esc(r.inLists.join(', ') || '\u2014') + '</td>'
+            + '<td style="color:var(--ink-faint);">' + (r.price != null ? '$' + r.price.toFixed(2) : '\u2014') + '</td>'
+            + pctTd(r.day, 1, 'today-col') + pctTd(r.w, 1, periodCellClass(r.w, r.m1, r.m2, 'w')) + pctTd(r.m1, 1, periodCellClass(r.w, r.m1, r.m2, 'm1')) + pctTd(r.m2, 1, periodCellClass(r.w, r.m1, r.m2, 'm2')) + [r.m3, r.m6, r.m9, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
+            + '</tr>').join('')
+        + '<tr><td colspan="12" style="text-align:left;color:var(--teal);font-family:var(--mono);font-size:9px;letter-spacing:1.5px;padding-top:14px;border-top:2px solid var(--line);">BENCHMARKS</td></tr>'
+        + searchBenchmarks.map(r =>
+            '<tr><td' + tickerClass(r.w, r.m1, r.m2) + '>' + esc(r.t) + '</td>'
+            + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.n) + '</td>'
+            + '<td style="text-align:left;color:var(--ink-faint);font-size:9.5px;">' + esc(r.inLists.join(', ') || '\u2014') + '</td>'
+            + '<td style="color:var(--ink-faint);">' + (r.price != null ? '$' + r.price.toFixed(2) : '\u2014') + '</td>'
+            + pctTd(r.day, 1, 'today-col') + pctTd(r.w, 1, periodCellClass(r.w, r.m1, r.m2, 'w')) + pctTd(r.m1, 1, periodCellClass(r.w, r.m1, r.m2, 'm1')) + pctTd(r.m2, 1, periodCellClass(r.w, r.m1, r.m2, 'm2')) + [r.m3, r.m6, r.m9, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
+            + '</tr>').join('')
+        + '</tbody></table></div>'
+      : '')
+    + (state.search.chartLoading ? '<div class="note" style="margin-top:8px;">Loading 3-month chart\u2026</div>' : '')
+    + (state.search.chart ? '<div style="margin-top:6px;">' + renderChartSVG(state.search.chart) + '</div>' : '');
+
   const returnBucketBody = '<div class="pills">'
     + RETURN_BUCKETS.map(l =>
         '<button class="pill'+(l===state.returnBucketFilter?' selected':'')+'" data-action="returnBucket" data-v="'+esc(l)+'">'+esc(l)+'</button>'
       ).join('')
     + '</div>';
-  const returnSearchRowBody = '<div class="pills" style="align-items:center;flex-wrap:nowrap;">'
-    + '<input id="returnSelectorSearchInput" type="text" placeholder="Search ticker\u2026" value="' + esc(state.returnSelectorSearch || '') + '" '
-      + 'style="flex:1;min-width:120px;font-family:var(--mono);font-size:12px;padding:8px 12px;border:1.5px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);" />'
-    + '<button class="pill" data-action="returnSelectorSearch" style="border-color:var(--gold);background:var(--gold-soft);color:var(--teal);">Search</button>'
-    + '<button class="pill" data-action="returnSelectorClear">Clear</button>'
-    + '</div>';
-  const returnSearchQuery = (state.returnSelectorSearch || "").trim().toUpperCase();
+  
   // Default (no category filter selected): stocks + ETFs + All Green +
   // 1M Gainers stocks, all merged together (leveraged ETFs included).
   // Selecting one of the four category buttons narrows to just that
@@ -1085,24 +1142,19 @@ function render(){
       returnBaseList.push(r);
     }
   }
-  const returnRows = returnSearchQuery
-    ? returnBaseList.filter(r => r.t.toUpperCase().includes(returnSearchQuery))
-    : returnBaseList
-        .filter(r => matchesReturnBucket(state.returnBucketFilter, r.y1))
-        .filter(r => matchesMomentumFilter(state.momentumFilter.returnSelector, r.w, r.m1, r.m2));
+  const returnRows = returnBaseList
+    .filter(r => matchesReturnBucket(state.returnBucketFilter, r.y1))
+    .filter(r => matchesMomentumFilter(state.momentumFilter.returnSelector, r.w, r.m1, r.m2));
   const returnSelectorBody =
     (returnRows.length
       ? '<div class="group-label">' + freshnessLabel() + '</div>'
-      : returnSearchQuery
-        ? '<div class="group-label" style="color:var(--rust)">\u201c' + esc(returnSearchQuery) + '\u201d NOT FOUND IN THIS LIST</div>'
-        : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
+      : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
     + '<div class="pills"><button class="pill' + (state.returnSelectorEtfFilter === "etfs" ? ' selected' : '') + '" data-action="returnSelectorEtfFilter" data-v="etfs">ETFs</button>'
       + '<button class="pill' + (state.returnSelectorEtfFilter === "leveraged" ? ' selected' : '') + '" data-action="returnSelectorEtfFilter" data-v="leveraged">Leveraged ETFs</button></div>'
     + '<div class="pills"><button class="pill' + (state.returnSelectorEtfFilter === "green" ? ' selected' : '') + '" data-action="returnSelectorEtfFilter" data-v="green">All Green</button>'
       + '<button class="pill' + (state.returnSelectorEtfFilter === "month1" ? ' selected' : '') + '" data-action="returnSelectorEtfFilter" data-v="month1">1M Gainers</button></div>'
     + returnBucketBody
     + momentumPillsHTML("returnSelector", state.momentumFilter.returnSelector)
-    + returnSearchRowBody
     + '<div class="note">US-tradable stocks and ETFs (NYSE, Nasdaq, ADRs) up 30% or more over the trailing 1 year, price \u2265 $1 \u2014 stocks and ETFs (including leveraged funds) are shown together by default. Pick ETFs, Leveraged ETFs, All Green, or 1M Gainers above to narrow to just those, pick a return band, search a ticker, or leave unselected to see all.</div>'
     + (returnRows.length
       ? '<div class="gwrap"><table class="gtable"><thead><tr>'
@@ -1116,7 +1168,8 @@ function render(){
             + pctTd(r.day, 1, 'today-col') + pctTd(r.w, 1, periodCellClass(r.w, r.m1, r.m2, 'w')) + pctTd(r.m1, 1, periodCellClass(r.w, r.m1, r.m2, 'm1')) + pctTd(r.m2, 1, periodCellClass(r.w, r.m1, r.m2, 'm2')) + [r.m3, r.m6, r.m9, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
             + '</tr>').join('')
         + '</tbody></table></div>'
-      : '');
+      : '')
+    + searchBody;
 
   const starRows = (state.starGainers || []).filter(r => matchesMomentumFilter(state.momentumFilter.stars, r.w, r.m1, r.m2));
   const starsBody =
@@ -1201,70 +1254,6 @@ function render(){
           + '</tbody></table></div>';
       }).join('');
 
-  const sr = state.search.result;
-  const srFiltered = sr ? sr.filter(r => matchesMomentumFilter(state.momentumFilter.search, r.w, r.m1, r.m2)) : sr;
-  // Fixed reference set shown below the search results so any searched
-  // ticker can be compared directly against these four major indices —
-  // same tickers/labels as the chart's benchmark lines above, sourced from
-  // this app's own tracked-ticker data (state.returns) rather than a
-  // second live lookup, for the same reason Search prefers batch data.
-  const searchBenchmarks = BENCHMARKS.map(b => {
-    const batch = state.returns[b.key];
-    return {
-      t: b.key, n: b.label, price: batch?.price ?? null,
-      day: batch?.["1D"] ?? null, w: batch?.["5D"] ?? null, m1: batch?.["1M"] ?? null,
-      m2: batch?.["2M"] ?? null, m3: batch?.["3M"] ?? null, m6: batch?.["6M"] ?? null, m9: batch?.["9M"] ?? null,
-      ytd: batch?.["YTD"] ?? null, y1: batch?.["1Y"] ?? null,
-      inLists: findListings(b.key)
-    };
-  });
-  const verdict = benchmarkVerdict(sr && sr.length ? sr[0] : null, state.returns["SPY"]);
-  const verdictLabel = { all:"BEATS BENCHMARKS", some:"SOMETIMES BEATS BENCHMARKS", none:"DOES NOT BEAT BENCHMARKS" }[verdict];
-  const verdictColor = { all:"#16A34A", some:"#F97316", none:"#DC2626" }[verdict];
-  const verdictHTML = verdict
-    ? '<div style="font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:1px;color:' + verdictColor + ';padding-bottom:6px;">' + verdictLabel + '</div>'
-    : '';
-  const searchBody =
-    '<div class="group-label">LIVE SEARCH</div>'
-    + '<div class="note">Search any US-listed stock or ETF by ticker or company name. Companies with multiple share classes (e.g. Alphabet\u2019s GOOGL/GOOG) return every class.</div>'
-    + verdictHTML
-    + '<div class="pills" style="align-items:center;flex-wrap:nowrap;">'
-    + '<input id="searchInput" type="text" placeholder="e.g. ServiceNow or NOW" value="' + esc(state.search.query || '') + '" '
-      + 'style="flex:1;min-width:0;font-family:var(--mono);font-size:13px;padding:8px 12px;border:1.5px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);" />'
-    + '<button class="pill" data-action="doSearch" style="border-color:var(--gold);background:var(--gold-soft);color:var(--teal);flex-shrink:0;">Search</button>'
-    + '<button class="pill" data-action="clearSearch" style="flex-shrink:0;">Clear</button>'
-    + '</div>'
-    + (state.search.loading ? '<div class="note">Searching…</div>' : '')
-    + (state.search.error ? '<div class="note warn">' + esc(state.search.error) + '</div>' : '')
-    + (sr && sr.length ? momentumPillsHTML("search", state.momentumFilter.search) : '')
-    + (sr && sr.length
-      ? '<div class="group-label">' + srFiltered.length + (srFiltered.length === 1 ? ' MATCH' : ' MATCHES') + '</div>'
-        + '<div class="gwrap"><table class="gtable"><thead><tr>'
-          + sortableTh("search","t","TICKER") + sortableTh("search","n","NAME") + '<th>IN</th>'
-          + sortableTh("search","price","PRICE")
-          + sortableTh("search","day","TODAY","today-col") + sortableTh("search","w","5D") + sortableTh("search","m1","1M")
-          + sortableTh("search","m2","2M") + sortableTh("search","m3","3M") + sortableTh("search","m6","6M") + sortableTh("search","m9","9M") + sortableTh("search","ytd","YTD") + sortableTh("search","y1","1Y")
-          + '</tr></thead><tbody>'
-        + sortRows(srFiltered, state.sort.search.key, state.sort.search.dir).map(r =>
-            '<tr><td' + tickerClass(r.w, r.m1, r.m2) + '>' + esc(r.t) + '</td>'
-            + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.n) + '</td>'
-            + '<td style="text-align:left;color:var(--ink-faint);font-size:9.5px;">' + esc(r.inLists.join(', ') || '\u2014') + '</td>'
-            + '<td style="color:var(--ink-faint);">' + (r.price != null ? '$' + r.price.toFixed(2) : '\u2014') + '</td>'
-            + pctTd(r.day, 1, 'today-col') + pctTd(r.w, 1, periodCellClass(r.w, r.m1, r.m2, 'w')) + pctTd(r.m1, 1, periodCellClass(r.w, r.m1, r.m2, 'm1')) + pctTd(r.m2, 1, periodCellClass(r.w, r.m1, r.m2, 'm2')) + [r.m3, r.m6, r.m9, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
-            + '</tr>').join('')
-        + '<tr><td colspan="12" style="text-align:left;color:var(--teal);font-family:var(--mono);font-size:9px;letter-spacing:1.5px;padding-top:14px;border-top:2px solid var(--line);">BENCHMARKS</td></tr>'
-        + searchBenchmarks.map(r =>
-            '<tr><td' + tickerClass(r.w, r.m1, r.m2) + '>' + esc(r.t) + '</td>'
-            + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.n) + '</td>'
-            + '<td style="text-align:left;color:var(--ink-faint);font-size:9.5px;">' + esc(r.inLists.join(', ') || '\u2014') + '</td>'
-            + '<td style="color:var(--ink-faint);">' + (r.price != null ? '$' + r.price.toFixed(2) : '\u2014') + '</td>'
-            + pctTd(r.day, 1, 'today-col') + pctTd(r.w, 1, periodCellClass(r.w, r.m1, r.m2, 'w')) + pctTd(r.m1, 1, periodCellClass(r.w, r.m1, r.m2, 'm1')) + pctTd(r.m2, 1, periodCellClass(r.w, r.m1, r.m2, 'm2')) + [r.m3, r.m6, r.m9, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
-            + '</tr>').join('')
-        + '</tbody></table></div>'
-      : '')
-    + (state.search.chartLoading ? '<div class="note" style="margin-top:8px;">Loading 3-month chart\u2026</div>' : '')
-    + (state.search.chart ? '<div style="margin-top:6px;">' + renderChartSVG(state.search.chart) + '</div>' : '');
-
   $("#main").innerHTML =
       sectionHTML("foundation","01","Foundation ETFs", 0, foundationBody)
     + sectionHTML("all","02","Base ETFs, Country, Sectors", 0, allBody)
@@ -1272,7 +1261,6 @@ function render(){
     + sectionHTML("stars","04","Star Gainers", state.selected.stars.size, starsBody)
     + sectionHTML("multi","05","Tickers Listed Above Multiple Times", 0, multiBody)
     + sectionHTML("red","06","Shorts - All Red All Year", 0, redBody)
-    + sectionHTML("search","07","Search", 0, searchBody)
     + '<div class="spacer"></div>';
 }
 
@@ -1301,8 +1289,6 @@ document.addEventListener("click", e => {
   } else if (a === "returnBucket"){
     state.returnBucketFilter = state.returnBucketFilter === el.dataset.v ? null : el.dataset.v;
     state.sort.returnSelector = { key: "y1", dir: "desc" };
-  } else if (a === "returnSelectorClear"){
-    state.returnSelectorSearch = "";
   } else if (a === "momentumFilter"){
     const msec = el.dataset.tbl;
     state.momentumFilter[msec] = state.momentumFilter[msec] === el.dataset.v ? null : el.dataset.v;
@@ -1334,15 +1320,11 @@ $("#refreshBtn").addEventListener("click", () => loadData(true));
 // keystroke) so it survives re-renders triggered by unrelated actions.
 document.addEventListener("input", e => {
   if (e.target && e.target.id === "searchInput") state.search.query = e.target.value;
-  else if (e.target && e.target.id === "returnSelectorSearchInput") state.returnSelectorSearch = e.target.value;
-});
+  });
 document.addEventListener("keydown", e => {
   if (e.key === "Enter" && e.target && e.target.id === "searchInput"){
     e.preventDefault();
     performSearch();
-  } else if (e.key === "Enter" && e.target && e.target.id === "returnSelectorSearchInput"){
-    e.preventDefault();
-    render();
   }
 });
 
