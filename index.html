@@ -412,8 +412,9 @@ const state = {
   originFilter: null,   // "Country" | "Sector" | "ETFs" | null (section 01 origin filter)
   returnBucketFilter: null, // "30-50%" | "50-75%" | "75-100%" | "100%+" | null (section 03 bucket filter)
   returnSelectorSearch: "", // section 03 ticker search box — searches the whole section, independent of the bucket filter above
+  returnSelectorIncludeETFs: false, // "ETFs" toggle for section 03 — merges in the ETFs above 100% 1Y list (section 04) when true
   momentumFilter: { foundation:null, all:null, etf1y:null, returnSelector:null, stars:null, green:null, red:null, month1:null, multi:null, search:null }, // "3 Ups" | "2 Ups" | "2 Downs" | "3 Downs" | null, per section
-  showLeveraged: { etf1y: true }, // "Leveraged ETFs" toggle, per section — selected (true) by default, meaning ALL ETFs (including leveraged) are shown; deselecting hides leveraged funds
+  showLeveraged: { etf1y: true, returnSelector: true }, // "Leveraged ETFs" toggle, per section — selected (true) by default, meaning ALL ETFs (including leveraged) are shown; deselecting hides leveraged funds
   sort: {                // per-table client-side sort: { key, dir } — click a column header to change
     all: { key: "y1", dir: "desc" },
     returnSelector: { key: "y1", dir: "desc" },
@@ -1059,9 +1060,20 @@ function render(){
     + '<button class="pill" data-action="returnSelectorClear">Clear</button>'
     + '</div>';
   const returnSearchQuery = (state.returnSelectorSearch || "").trim().toUpperCase();
+  // When "ETFs" is toggled on, ETFs above 100% 1Y (section 04's own list)
+  // are merged in — note that since that list only ever contains funds
+  // already up 100%+ over the trailing year, merged ETFs will only ever
+  // land in the "100%+" bucket (or the unfiltered "show all" view); the
+  // 30-50/50-75/75-100 bands are stocks-only, since section 04 has no
+  // data for ETFs below 100% 1Y. The "Leveraged ETFs" toggle here mirrors
+  // section 04's own — selected by default shows all ETFs including
+  // leveraged/inverse funds; deselecting hides them.
+  const returnBaseList = state.returnSelectorIncludeETFs
+    ? [...(state.stockReturnSelector || []), ...((state.etf1YClub || []).filter(r => state.showLeveraged.returnSelector || !isLeveragedName(r.n)))]
+    : (state.stockReturnSelector || []);
   const returnRows = returnSearchQuery
-    ? (state.stockReturnSelector || []).filter(r => r.t.toUpperCase().includes(returnSearchQuery))
-    : (state.stockReturnSelector || [])
+    ? returnBaseList.filter(r => r.t.toUpperCase().includes(returnSearchQuery))
+    : returnBaseList
         .filter(r => matchesReturnBucket(state.returnBucketFilter, r.y1))
         .filter(r => matchesMomentumFilter(state.momentumFilter.returnSelector, r.w, r.m1, r.m2));
   const returnSelectorBody =
@@ -1072,7 +1084,9 @@ function render(){
         : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
     + returnBucketBody
     + momentumPillsHTML("returnSelector", state.momentumFilter.returnSelector)
-    + '<div class="note">US-tradable stocks (NYSE, Nasdaq, ADRs) up 30% or more over the trailing 1 year, price \u2265 $1. Pick a return band above, search a ticker, or leave unselected to see all.</div>'
+    + '<div class="pills"><button class="pill' + (state.returnSelectorIncludeETFs ? ' selected' : '') + '" data-action="returnSelectorToggleETFs">ETFs</button>'
+      + '<button class="pill' + (state.showLeveraged.returnSelector ? ' selected' : '') + '" data-action="toggleLeveraged" data-tbl="returnSelector">Leveraged ETFs</button></div>'
+    + '<div class="note">US-tradable stocks (NYSE, Nasdaq, ADRs) up 30% or more over the trailing 1 year, price \u2265 $1. Pick a return band above, search a ticker, or leave unselected to see all. Toggle ETFs to include funds from the ETFs above 100% 1Y screen.</div>'
     + (returnRows.length
       ? '<div class="gwrap"><table class="gtable"><thead><tr>'
         + sortableTh("returnSelector","t","TICKER") + sortableTh("returnSelector","sector","SECTOR")
@@ -1081,7 +1095,7 @@ function render(){
         + '</tr></thead><tbody>'
         + sortRows(returnRows, state.sort.returnSelector.key, state.sort.returnSelector.dir).map(r =>
             '<tr><td' + tickerClass(r.w, r.m1, r.m2) + '>' + esc(r.t) + '</td>'
-            + '<td title="' + esc(r.sector || '\u2014') + '" style="text-align:left;color:var(--ink-faint);font-size:10.5px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(r.sector || '\u2014') + '</td>'
+            + '<td title="' + esc(r.sector || r.n || '\u2014') + '" style="text-align:left;color:var(--ink-faint);font-size:10.5px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(r.sector || r.n || '\u2014') + '</td>'
             + pctTd(r.day, 1, 'today-col') + pctTd(r.w, 1, periodCellClass(r.w, r.m1, r.m2, 'w')) + pctTd(r.m1, 1, periodCellClass(r.w, r.m1, r.m2, 'm1')) + pctTd(r.m2, 1, periodCellClass(r.w, r.m1, r.m2, 'm2')) + [r.m3, r.m6, r.m9, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
             + '</tr>').join('')
         + '</tbody></table></div>'
@@ -1348,6 +1362,8 @@ document.addEventListener("click", e => {
   } else if (a === "toggleLeveraged"){
     const msec = el.dataset.tbl;
     state.showLeveraged[msec] = !state.showLeveraged[msec];
+  } else if (a === "returnSelectorToggleETFs"){
+    state.returnSelectorIncludeETFs = !state.returnSelectorIncludeETFs;
   } else if (a === "sortCol"){
     const section = el.dataset.tbl, key = el.dataset.key;
     const cur = state.sort[section];
