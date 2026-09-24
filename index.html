@@ -412,7 +412,7 @@ const state = {
   originFilter: null,   // "Country" | "Sector" | "ETFs" | null (section 01 origin filter)
   returnBucketFilter: null, // "30-50%" | "50-75%" | "75-100%" | "100%+" | null (section 03 bucket filter)
   returnSelectorSearch: "", // section 03 ticker search box — searches the whole section, independent of the bucket filter above
-  returnSelectorEtfFilter: null, // null | "etfs" | "leveraged" | "green" — section 03's category filter; null merges stocks + ETFs + All Green All Year stocks, deduped by ticker (default)
+  returnSelectorEtfFilter: null, // null | "etfs" | "leveraged" | "green" | "month1" — section 03's category filter; null merges stocks + ETFs + All Green + 1M Gainers stocks, deduped by ticker (default)
   momentumFilter: { foundation:null, all:null, returnSelector:null, stars:null, red:null, month1:null, multi:null, search:null }, // "3 Ups" | "2 Ups" | "2 Downs" | "3 Downs" | null, per section
   sort: {                // per-table client-side sort: { key, dir } — click a column header to change
     all: { key: "y1", dir: "desc" },
@@ -1051,20 +1051,23 @@ function render(){
     + RETURN_BUCKETS.map(l =>
         '<button class="pill'+(l===state.returnBucketFilter?' selected':'')+'" data-action="returnBucket" data-v="'+esc(l)+'">'+esc(l)+'</button>'
       ).join('')
+    + '</div>';
+  const returnSearchRowBody = '<div class="pills" style="align-items:center;flex-wrap:nowrap;">'
     + '<input id="returnSelectorSearchInput" type="text" placeholder="Search ticker\u2026" value="' + esc(state.returnSelectorSearch || '') + '" '
       + 'style="flex:1;min-width:120px;font-family:var(--mono);font-size:12px;padding:8px 12px;border:1.5px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);" />'
     + '<button class="pill" data-action="returnSelectorSearch" style="border-color:var(--gold);background:var(--gold-soft);color:var(--teal);">Search</button>'
     + '<button class="pill" data-action="returnSelectorClear">Clear</button>'
     + '</div>';
   const returnSearchQuery = (state.returnSelectorSearch || "").trim().toUpperCase();
-  // Default (no ETF filter selected): stocks + every ETF from the ETFs
-  // above 100% 1Y screen, merged together (leveraged included). Selecting
-  // "ETFs" narrows to ETFs only (stocks hidden); selecting "Leveraged
-  // ETFs" narrows further to just the leveraged/inverse funds in that
-  // list. All three states still respect the return-band buckets and
-  // momentum filter below.
+  // Default (no category filter selected): stocks + ETFs + All Green +
+  // 1M Gainers stocks, all merged together (leveraged ETFs included).
+  // Selecting one of the four category buttons narrows to just that
+  // category; all Green/1M Gainers stocks can overlap the base stock
+  // list, so the default merge dedupes by ticker. All states still
+  // respect the return-band buckets and momentum filter below.
   const etfPoolRows = state.etf1YClub || [];
   const greenPoolRows = state.allGreen || [];
+  const month1PoolRows = state.oneMonthGainers || [];
   let returnBaseList;
   if (state.returnSelectorEtfFilter === "etfs"){
     returnBaseList = etfPoolRows;
@@ -1072,13 +1075,12 @@ function render(){
     returnBaseList = etfPoolRows.filter(r => isLeveragedName(r.n));
   } else if (state.returnSelectorEtfFilter === "green"){
     returnBaseList = greenPoolRows;
+  } else if (state.returnSelectorEtfFilter === "month1"){
+    returnBaseList = month1PoolRows;
   } else {
-    // Stocks + ETFs + All Green stocks can genuinely overlap on the same
-    // ticker (unlike ETFs, All Green is itself a stock list), so dedupe
-    // by ticker here — first list wins — to avoid showing a stock twice.
     const seen = new Set();
     returnBaseList = [];
-    for (const r of [...(state.stockReturnSelector || []), ...etfPoolRows, ...greenPoolRows]){
+    for (const r of [...(state.stockReturnSelector || []), ...etfPoolRows, ...greenPoolRows, ...month1PoolRows]){
       if (seen.has(r.t)) continue;
       seen.add(r.t);
       returnBaseList.push(r);
@@ -1095,12 +1097,14 @@ function render(){
       : returnSearchQuery
         ? '<div class="group-label" style="color:var(--rust)">\u201c' + esc(returnSearchQuery) + '\u201d NOT FOUND IN THIS LIST</div>'
         : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
+    + '<div class="pills"><button class="pill' + (state.returnSelectorEtfFilter === "etfs" ? ' selected' : '') + '" data-action="returnSelectorEtfFilter" data-v="etfs">ETFs</button>'
+      + '<button class="pill' + (state.returnSelectorEtfFilter === "leveraged" ? ' selected' : '') + '" data-action="returnSelectorEtfFilter" data-v="leveraged">Leveraged ETFs</button></div>'
+    + '<div class="pills"><button class="pill' + (state.returnSelectorEtfFilter === "green" ? ' selected' : '') + '" data-action="returnSelectorEtfFilter" data-v="green">All Green</button>'
+      + '<button class="pill' + (state.returnSelectorEtfFilter === "month1" ? ' selected' : '') + '" data-action="returnSelectorEtfFilter" data-v="month1">1M Gainers</button></div>'
     + returnBucketBody
     + momentumPillsHTML("returnSelector", state.momentumFilter.returnSelector)
-    + '<div class="pills"><button class="pill' + (state.returnSelectorEtfFilter === "etfs" ? ' selected' : '') + '" data-action="returnSelectorEtfFilter" data-v="etfs">ETFs</button>'
-      + '<button class="pill' + (state.returnSelectorEtfFilter === "leveraged" ? ' selected' : '') + '" data-action="returnSelectorEtfFilter" data-v="leveraged">Leveraged ETFs</button>'
-      + '<button class="pill' + (state.returnSelectorEtfFilter === "green" ? ' selected' : '') + '" data-action="returnSelectorEtfFilter" data-v="green">All Green All Year</button></div>'
-    + '<div class="note">US-tradable stocks and ETFs (NYSE, Nasdaq, ADRs) up 30% or more over the trailing 1 year, price \u2265 $1 \u2014 stocks and ETFs (including leveraged funds) are shown together by default. Pick ETFs, Leveraged ETFs, or All Green All Year above to narrow to just those, pick a return band, search a ticker, or leave unselected to see all.</div>'
+    + returnSearchRowBody
+    + '<div class="note">US-tradable stocks and ETFs (NYSE, Nasdaq, ADRs) up 30% or more over the trailing 1 year, price \u2265 $1 \u2014 stocks and ETFs (including leveraged funds) are shown together by default. Pick ETFs, Leveraged ETFs, All Green, or 1M Gainers above to narrow to just those, pick a return band, search a ticker, or leave unselected to see all.</div>'
     + (returnRows.length
       ? '<div class="gwrap"><table class="gtable"><thead><tr>'
         + sortableTh("returnSelector","t","TICKER") + sortableTh("returnSelector","sector","SECTOR")
