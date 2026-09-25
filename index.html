@@ -1155,6 +1155,7 @@ function render(){
       + '<button class="pill' + (state.returnSelectorEtfFilter === "month1" ? ' selected' : '') + '" data-action="returnSelectorEtfFilter" data-v="month1">1M Gainers</button></div>'
     + returnBucketBody
     + momentumPillsHTML("returnSelector", state.momentumFilter.returnSelector)
+    + searchBody
     + '<div class="note">US-tradable stocks and ETFs (NYSE, Nasdaq, ADRs) up 30% or more over the trailing 1 year, price \u2265 $1 \u2014 stocks and ETFs (including leveraged funds) are shown together by default. Pick ETFs, Leveraged ETFs, All Green, or 1M Gainers above to narrow to just those, pick a return band, search a ticker, or leave unselected to see all.</div>'
     + (returnRows.length
       ? '<div class="gwrap"><table class="gtable"><thead><tr>'
@@ -1168,8 +1169,7 @@ function render(){
             + pctTd(r.day, 1, 'today-col') + pctTd(r.w, 1, periodCellClass(r.w, r.m1, r.m2, 'w')) + pctTd(r.m1, 1, periodCellClass(r.w, r.m1, r.m2, 'm1')) + pctTd(r.m2, 1, periodCellClass(r.w, r.m1, r.m2, 'm2')) + [r.m3, r.m6, r.m9, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
             + '</tr>').join('')
         + '</tbody></table></div>'
-      : '')
-    + searchBody;
+      : '');
 
   const starRows = (state.starGainers || []).filter(r => matchesMomentumFilter(state.momentumFilter.stars, r.w, r.m1, r.m2));
   const starsBody =
