@@ -464,7 +464,7 @@ function findListings(t){
   const labels = [];
   const inArr = arr => Array.isArray(arr) && arr.some(r => r.t === t);
   if (inArr(state.stockReturnSelector)) labels.push("Stock Return Selector");
-  if (inArr(state.etf1YClub)) labels.push("ETFs above 100% 1Y");
+  if (inArr(state.etf1YClub)) labels.push("ETFs");
   if (inArr(state.starGainers)) labels.push("Star Gainers");
   if (inArr(state.allGreen)) labels.push("All Green");
   if (inArr(state.allRed)) labels.push("Shorts (All Red)");
