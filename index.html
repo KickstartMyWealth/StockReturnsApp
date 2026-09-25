@@ -1126,7 +1126,7 @@ function render(){
   const month1PoolRows = state.oneMonthGainers || [];
   let returnBaseList;
   if (state.returnSelectorEtfFilter === "etfs"){
-    returnBaseList = etfPoolRows;
+    returnBaseList = etfPoolRows.filter(r => !isLeveragedName(r.n));
   } else if (state.returnSelectorEtfFilter === "leveraged"){
     returnBaseList = etfPoolRows.filter(r => isLeveragedName(r.n));
   } else if (state.returnSelectorEtfFilter === "green"){
