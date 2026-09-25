@@ -1153,10 +1153,6 @@ function render(){
     + RETURN_BUCKETS.map(l =>
         '<button class="pill'+(l===state.returnBucketFilter?' selected':'')+'" data-action="returnBucket" data-v="'+esc(l)+'">'+esc(l)+'</button>'
       ).join('')
-    + '<select id="returnSelectorSectorSelect" style="font-family:var(--mono);font-size:12px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);">'
-      + '<option value="">All Sectors</option>'
-      + RETURN_SECTORS.map(s => '<option value="'+esc(s)+'"'+(s===state.returnSelectorSectorFilter?' selected':'')+'>'+esc(s)+'</option>').join('')
-      + '</select>'
     + '</div>';
   
   // Default (no category filter selected): stocks + ETFs + All Green +
@@ -1195,7 +1191,11 @@ function render(){
       ? '<div class="group-label">' + freshnessLabel() + '</div>'
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
     + '<div class="pills"><button class="pill' + (state.returnSelectorEtfFilter === "etfs" ? ' selected' : '') + '" data-action="returnSelectorEtfFilter" data-v="etfs">ETFs</button>'
-      + '<button class="pill' + (state.returnSelectorEtfFilter === "leveraged" ? ' selected' : '') + '" data-action="returnSelectorEtfFilter" data-v="leveraged">Leveraged ETFs</button></div>'
+      + '<button class="pill' + (state.returnSelectorEtfFilter === "leveraged" ? ' selected' : '') + '" data-action="returnSelectorEtfFilter" data-v="leveraged">Leveraged ETFs</button>'
+      + '<select id="returnSelectorSectorSelect" style="font-family:var(--mono);font-size:12px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);">'
+        + '<option value="">All Sectors</option>'
+        + RETURN_SECTORS.map(s => '<option value="'+esc(s)+'"'+(s===state.returnSelectorSectorFilter?' selected':'')+'>'+esc(s)+'</option>').join('')
+        + '</select></div>'
     + '<div class="pills"><button class="pill' + (state.returnSelectorEtfFilter === "green" ? ' selected' : '') + '" data-action="returnSelectorEtfFilter" data-v="green">All Green</button>'
       + '<button class="pill' + (state.returnSelectorEtfFilter === "month1" ? ' selected' : '') + '" data-action="returnSelectorEtfFilter" data-v="month1">1M Gainers</button></div>'
     + returnBucketBody
@@ -1326,6 +1326,10 @@ document.addEventListener("click", e => {
     return;
   } else if (a === "clearSearch"){
     state.search = { query: "", loading: false, error: null, result: null, chart: null, chartLoading: false };
+    state.returnSelectorEtfFilter = null;
+    state.returnBucketFilter = null;
+    state.returnSelectorSectorFilter = null;
+    state.momentumFilter.returnSelector = null;
   } else if (a === "timeframe"){
     state.timeframe = state.timeframe === el.dataset.v ? null : el.dataset.v;
     ensurePeriod();
