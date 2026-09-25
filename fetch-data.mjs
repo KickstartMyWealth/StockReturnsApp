@@ -338,9 +338,12 @@ async function main() {
     console.warn("Market screen failed:", e.message);
   }
 
-  // ---- ETFs above 100% 1Y: whole-ETF-market screen, separate from the
-  // stock screen above (funds live under a different "type" on this API
-  // and don’t carry a "sector", so they get their own name-based table). ----
+  // ---- ETF screen for section 03's return selector: whole-ETF-market
+  // screen, separate from the stock screen above (funds live under a
+  // different "type" on this API and don’t carry a "sector", so they get
+  // their own name-based table). 1Y >= 30%, matching the stock-side floor
+  // in stockReturnSelector above — not just "100%+" funds, so an ETF like
+  // SLV or XBI with a solid but sub-100% 1-year return still shows up. ----
   let etf1YClub = null;
   try {
     const j = await fetchJSON(ETF_SCREEN_URL);
@@ -353,7 +356,7 @@ async function main() {
     const rows = Object.entries(map)
       .map(([t, v]) => ({ t, n: v.name || t, price: Number(v.price), y1: Number(v.ch1y), day: Number(v.change),
         w: RWe(v.ch1w), m1: RWe(v.ch1m), m3: RWe(v.ch3m), m6: RWe(v.ch6m), ytd: RWe(v.chYTD), volume: Number(v.volume) }))
-      .filter(r => Number.isFinite(r.price) && Number.isFinite(r.y1) && r.price >= 1 && r.y1 > 100 && r.y1 <= Y1_SANITY_CAP
+      .filter(r => Number.isFinite(r.price) && Number.isFinite(r.y1) && r.price >= 1 && r.y1 >= 30 && r.y1 <= Y1_SANITY_CAP
         && Number.isFinite(r.volume) && r.volume >= MIN_VOLUME)
       .sort((a, b) => b.y1 - a.y1)
       .map(({ volume, ...r }) => ({ ...r, price: +r.price.toFixed(2), y1: +r.y1.toFixed(2), day: Number.isFinite(r.day) ? +r.day.toFixed(2) : null }));
