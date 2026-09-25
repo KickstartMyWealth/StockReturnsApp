@@ -667,6 +667,38 @@ async function resolveTickers(query){
   return results;
 }
 
+// Keeps section 03's category/bucket/momentum filter buttons in sync with
+// whatever ticker is currently the primary search result \u2014 e.g. selecting
+// "ETFs" then searching a stock clears "ETFs" (it isn't one), and searching
+// a ticker that's 5D/1M/2M all positive lights up "3 Ups" automatically.
+function syncFiltersToPrimaryResult(){
+  const r = state.search.result && state.search.result[0];
+  if (!r) return;
+  const inLists = r.inLists || [];
+  if (inLists.includes("ETFs") && isLeveragedName(r.n)) {
+    state.returnSelectorEtfFilter = "leveraged";
+  } else if (inLists.includes("ETFs")) {
+    state.returnSelectorEtfFilter = "etfs";
+  } else if (inLists.includes("All Green")) {
+    state.returnSelectorEtfFilter = "green";
+  } else if (inLists.includes("1 Month Gainers")) {
+    state.returnSelectorEtfFilter = "month1";
+  } else {
+    state.returnSelectorEtfFilter = null;
+  }
+  state.returnBucketFilter = r.y1 == null ? null
+    : r.y1 >= 100 ? "100%+"
+    : r.y1 >= 75 ? "75-100%"
+    : r.y1 >= 50 ? "50-75%"
+    : r.y1 >= 30 ? "30-50%"
+    : null;
+  state.momentumFilter.returnSelector = matchesMomentumFilter("3 Ups", r.w, r.m1, r.m2) ? "3 Ups"
+    : matchesMomentumFilter("2 Ups", r.w, r.m1, r.m2) ? "2 Ups"
+    : matchesMomentumFilter("2 Downs", r.w, r.m1, r.m2) ? "2 Downs"
+    : matchesMomentumFilter("3 Downs", r.w, r.m1, r.m2) ? "3 Downs"
+    : null;
+}
+
 async function performSearch(){
   const input = $("#searchInput");
   const q = input ? input.value : state.search.query;
@@ -704,6 +736,7 @@ async function performSearch(){
       };
     });
     primaryTicker = list[0] && list[0].t;
+    syncFiltersToPrimaryResult();
   } catch (e) {
     state.search.error = "Couldn't find that ticker or company. Try the exact ticker symbol.";
   }
@@ -738,6 +771,7 @@ async function performSearch(){
             ? { ...r, m2: r.m2 == null ? compute2MFromHistory(histByTicker[r.t]) : r.m2, m9: r.m9 == null ? compute9MFromHistory(histByTicker[r.t]) : r.m9 }
             : r
         );
+        syncFiltersToPrimaryResult();
       }
     } catch (e) {}
     state.search.chartLoading = false;
