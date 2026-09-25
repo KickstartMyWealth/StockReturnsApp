@@ -412,6 +412,7 @@ const state = {
   originFilter: null,   // "Country" | "Sector" | "ETFs" | null (section 01 origin filter)
   returnBucketFilter: null, // "30-50%" | "50-75%" | "75-100%" | "100%+" | null (section 03 bucket filter)
   returnSelectorEtfFilter: null, // null | "etfs" | "leveraged" | "green" | "month1" — section 03's category filter; null merges stocks + ETFs + All Green + 1M Gainers stocks, deduped by ticker (default)
+  returnSelectorSectorFilter: null, // null | a GICS sector string — section 03's sector filter (ETF rows have no sector, so they're excluded whenever a sector is picked)
   momentumFilter: { foundation:null, all:null, returnSelector:null, stars:null, red:null, multi:null, search:null }, // "3 Ups" | "2 Ups" | "2 Downs" | "3 Downs" | null, per section
   sort: {                // per-table client-side sort: { key, dir } — click a column header to change
     all: { key: "y1", dir: "desc" },
@@ -1143,10 +1144,19 @@ function render(){
     + (state.search.chartLoading ? '<div class="note" style="margin-top:8px;">Loading 3-month chart\u2026</div>' : '')
     + (state.search.chart ? '<div style="margin-top:6px;">' + renderChartSVG(state.search.chart) + '</div>' : '');
 
+  const returnSectorSet = new Set();
+  for (const list of [state.stockReturnSelector, state.allGreen, state.oneMonthGainers]){
+    for (const r of (list || [])) if (r.sector) returnSectorSet.add(r.sector);
+  }
+  const RETURN_SECTORS = [...returnSectorSet].sort();
   const returnBucketBody = '<div class="pills">'
     + RETURN_BUCKETS.map(l =>
         '<button class="pill'+(l===state.returnBucketFilter?' selected':'')+'" data-action="returnBucket" data-v="'+esc(l)+'">'+esc(l)+'</button>'
       ).join('')
+    + '<select id="returnSelectorSectorSelect" style="font-family:var(--mono);font-size:12px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);">'
+      + '<option value="">All Sectors</option>'
+      + RETURN_SECTORS.map(s => '<option value="'+esc(s)+'"'+(s===state.returnSelectorSectorFilter?' selected':'')+'>'+esc(s)+'</option>').join('')
+      + '</select>'
     + '</div>';
   
   // Default (no category filter selected): stocks + ETFs + All Green +
@@ -1178,6 +1188,7 @@ function render(){
   }
   const returnRows = returnBaseList
     .filter(r => matchesReturnBucket(state.returnBucketFilter, r.y1))
+    .filter(r => !state.returnSelectorSectorFilter || r.sector === state.returnSelectorSectorFilter)
     .filter(r => matchesMomentumFilter(state.momentumFilter.returnSelector, r.w, r.m1, r.m2));
   const returnSelectorBody =
     (returnRows.length
@@ -1355,6 +1366,12 @@ $("#refreshBtn").addEventListener("click", () => loadData(true));
 document.addEventListener("input", e => {
   if (e.target && e.target.id === "searchInput") state.search.query = e.target.value;
   });
+document.addEventListener("change", e => {
+  if (e.target && e.target.id === "returnSelectorSectorSelect"){
+    state.returnSelectorSectorFilter = e.target.value || null;
+    render();
+  }
+});
 document.addEventListener("keydown", e => {
   if (e.key === "Enter" && e.target && e.target.id === "searchInput"){
     e.preventDefault();
