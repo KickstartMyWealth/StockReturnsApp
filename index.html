@@ -411,7 +411,7 @@ const state = {
   search: { query: "", loading: false, error: null, result: null, chart: null, chartLoading: false },
   originFilter: null,   // "Country" | "Sector" | "ETFs" | null (section 01 origin filter)
   returnBucketFilter: null, // "30-50%" | "50-75%" | "75-100%" | "100%+" | null (section 03 bucket filter)
-  returnSelectorEtfFilter: null, // null | "etfs" | "leveraged" | "green" | "month1" — section 03's category filter; null merges stocks + ETFs + All Green + 1M Gainers stocks, deduped by ticker (default)
+  returnSelectorCategoryFilters: new Set(), // subset of "etfs"/"leveraged"/"green"/"month1" — section 03's category filters, AND'd together when more than one is selected; empty merges stocks + ETFs + All Green + 1M Gainers stocks, deduped by ticker (default)
   returnSelectorSectorFilter: null, // null | a GICS sector string — section 03's sector filter (ETF rows have no sector, so they're excluded whenever a sector is picked)
   momentumFilter: { foundation:null, all:null, returnSelector:null, stars:null, red:null, multi:null, search:null }, // "3 Ups" | "2 Ups" | "2 Downs" | "3 Downs" | null, per section
   sort: {                // per-table client-side sort: { key, dir } — click a column header to change
@@ -676,17 +676,12 @@ function syncFiltersToPrimaryResult(){
   const r = state.search.result && state.search.result[0];
   if (!r) return;
   const inLists = r.inLists || [];
-  if (inLists.includes("ETFs") && isLeveragedName(r.n)) {
-    state.returnSelectorEtfFilter = "leveraged";
-  } else if (inLists.includes("ETFs")) {
-    state.returnSelectorEtfFilter = "etfs";
-  } else if (inLists.includes("All Green")) {
-    state.returnSelectorEtfFilter = "green";
-  } else if (inLists.includes("1 Month Gainers")) {
-    state.returnSelectorEtfFilter = "month1";
-  } else {
-    state.returnSelectorEtfFilter = null;
-  }
+  const cats = new Set();
+  if (inLists.includes("ETFs") && isLeveragedName(r.n)) cats.add("leveraged");
+  else if (inLists.includes("ETFs")) cats.add("etfs");
+  if (inLists.includes("All Green")) cats.add("green");
+  if (inLists.includes("1 Month Gainers")) cats.add("month1");
+  state.returnSelectorCategoryFilters = cats;
   state.returnBucketFilter = r.y1 == null ? null
     : r.y1 >= 100 ? "100%+"
     : r.y1 >= 75 ? "75-100%"
@@ -1168,15 +1163,8 @@ function render(){
   const greenPoolRows = state.allGreen || [];
   const month1PoolRows = state.oneMonthGainers || [];
   let returnBaseList;
-  if (state.returnSelectorEtfFilter === "etfs"){
-    returnBaseList = etfPoolRows.filter(r => !isLeveragedName(r.n));
-  } else if (state.returnSelectorEtfFilter === "leveraged"){
-    returnBaseList = etfPoolRows.filter(r => isLeveragedName(r.n));
-  } else if (state.returnSelectorEtfFilter === "green"){
-    returnBaseList = greenPoolRows;
-  } else if (state.returnSelectorEtfFilter === "month1"){
-    returnBaseList = month1PoolRows;
-  } else {
+  const activeCats = state.returnSelectorCategoryFilters;
+  if (activeCats.size === 0) {
     const seen = new Set();
     returnBaseList = [];
     for (const r of [...(state.stockReturnSelector || []), ...etfPoolRows, ...greenPoolRows, ...month1PoolRows]){
@@ -1184,23 +1172,46 @@ function render(){
       seen.add(r.t);
       returnBaseList.push(r);
     }
+  } else {
+    // AND semantics: intersect the chosen categories by ticker. Some
+    // combinations are disjoint by nature (e.g. "ETFs" + "All Green" can
+    // never overlap) and correctly yield nothing — that's a real answer,
+    // not a bug, and the "No results with filters found" message covers it.
+    const listFor = cat =>
+      cat === "etfs" ? etfPoolRows.filter(r => !isLeveragedName(r.n))
+      : cat === "leveraged" ? etfPoolRows.filter(r => isLeveragedName(r.n))
+      : cat === "green" ? greenPoolRows
+      : cat === "month1" ? month1PoolRows
+      : [];
+    const catLists = [...activeCats].map(listFor);
+    let tickers = new Set(catLists[0].map(r => r.t));
+    for (let i = 1; i < catLists.length; i++){
+      const next = new Set(catLists[i].map(r => r.t));
+      tickers = new Set([...tickers].filter(t => next.has(t)));
+    }
+    const rowByTicker = new Map();
+    for (const list of catLists) for (const r of list) if (!rowByTicker.has(r.t)) rowByTicker.set(r.t, r);
+    returnBaseList = [...tickers].map(t => rowByTicker.get(t));
   }
   const returnRows = returnBaseList
     .filter(r => matchesReturnBucket(state.returnBucketFilter, r.y1))
     .filter(r => !state.returnSelectorSectorFilter || r.sector === state.returnSelectorSectorFilter)
     .filter(r => matchesMomentumFilter(state.momentumFilter.returnSelector, r.w, r.m1, r.m2));
+  const returnHasAnyFilter = state.returnSelectorCategoryFilters.size > 0 || !!state.returnBucketFilter || !!state.returnSelectorSectorFilter || !!state.momentumFilter.returnSelector;
   const returnSelectorBody =
     (returnRows.length
       ? '<div class="group-label">' + freshnessLabel() + '</div>'
-      : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
-    + '<div class="pills"><button class="pill' + (state.returnSelectorEtfFilter === "etfs" ? ' selected' : '') + '" data-action="returnSelectorEtfFilter" data-v="etfs">ETFs</button>'
-      + '<button class="pill' + (state.returnSelectorEtfFilter === "leveraged" ? ' selected' : '') + '" data-action="returnSelectorEtfFilter" data-v="leveraged">Leveraged ETFs</button>'
+      : returnHasAnyFilter
+        ? '<div class="group-label" style="color:var(--rust)">No results with filters found</div>'
+        : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
+    + '<div class="pills"><button class="pill' + (state.returnSelectorCategoryFilters.has("etfs") ? ' selected' : '') + '" data-action="returnSelectorEtfFilter" data-v="etfs">ETFs</button>'
+      + '<button class="pill' + (state.returnSelectorCategoryFilters.has("leveraged") ? ' selected' : '') + '" data-action="returnSelectorEtfFilter" data-v="leveraged">Leveraged ETFs</button>'
       + '<select id="returnSelectorSectorSelect" style="font-family:var(--mono);font-size:12px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);">'
         + '<option value="">All Sectors</option>'
         + RETURN_SECTORS.map(s => '<option value="'+esc(s)+'"'+(s===state.returnSelectorSectorFilter?' selected':'')+'>'+esc(s)+' ('+returnSectorCounts[s]+')</option>').join('')
         + '</select></div>'
-    + '<div class="pills"><button class="pill' + (state.returnSelectorEtfFilter === "green" ? ' selected' : '') + '" data-action="returnSelectorEtfFilter" data-v="green">All Green</button>'
-      + '<button class="pill' + (state.returnSelectorEtfFilter === "month1" ? ' selected' : '') + '" data-action="returnSelectorEtfFilter" data-v="month1">1M Gainers</button></div>'
+    + '<div class="pills"><button class="pill' + (state.returnSelectorCategoryFilters.has("green") ? ' selected' : '') + '" data-action="returnSelectorEtfFilter" data-v="green">All Green</button>'
+      + '<button class="pill' + (state.returnSelectorCategoryFilters.has("month1") ? ' selected' : '') + '" data-action="returnSelectorEtfFilter" data-v="month1">1M Gainers</button></div>'
     + returnBucketBody
     + momentumPillsHTML("returnSelector", state.momentumFilter.returnSelector)
     + searchBody
@@ -1329,7 +1340,7 @@ document.addEventListener("click", e => {
     return;
   } else if (a === "clearSearch"){
     state.search = { query: "", loading: false, error: null, result: null, chart: null, chartLoading: false };
-    state.returnSelectorEtfFilter = null;
+    state.returnSelectorCategoryFilters = new Set();
     state.returnBucketFilter = null;
     state.returnSelectorSectorFilter = null;
     state.momentumFilter.returnSelector = null;
@@ -1346,8 +1357,11 @@ document.addEventListener("click", e => {
     const msec = el.dataset.tbl;
     state.momentumFilter[msec] = state.momentumFilter[msec] === el.dataset.v ? null : el.dataset.v;
   } else if (a === "returnSelectorEtfFilter"){
-    state.returnSelectorEtfFilter = state.returnSelectorEtfFilter === el.dataset.v ? null : el.dataset.v;
-    state.sort.returnSelector = { key: state.returnSelectorEtfFilter === "month1" ? "m1" : "y1", dir: "desc" };
+    const catV = el.dataset.v;
+    if (state.returnSelectorCategoryFilters.has(catV)) state.returnSelectorCategoryFilters.delete(catV);
+    else state.returnSelectorCategoryFilters.add(catV);
+    const cats = state.returnSelectorCategoryFilters;
+    state.sort.returnSelector = { key: cats.size === 1 && cats.has("month1") ? "m1" : "y1", dir: "desc" };
   } else if (a === "sortCol"){
     const section = el.dataset.tbl, key = el.dataset.key;
     const cur = state.sort[section];
