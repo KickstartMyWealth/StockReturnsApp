@@ -419,7 +419,7 @@ const state = {
     returnSelector: { key: "y1", dir: "desc" },
     search: { key: "m3", dir: "desc" },
     stars: { key: "stars", dir: "desc" },
-    red: { key: "ytd", dir: "asc" },
+    red: { key: "m9", dir: "asc" },
     multi: { key: "count", dir: "desc" },
   },
   searchReturns: {}    // period -> { TICKER: pct } when source === 'search'
@@ -1256,7 +1256,7 @@ function render(){
       ? '<div class="group-label">' + freshnessLabel() + '</div>'
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
     + momentumPillsHTML("red", state.momentumFilter.red)
-    + '<div class="note">Stocks red in all six windows \u2014 5-day, 1-month, 3-month, 6-month, YTD, and 1-year \u2014 price \u2265 $1. Worst YTD first.</div>'
+    + '<div class="note">Stocks consistently negative across the 5-day, 1-month, 2-month, 3-month, 6-month, and 9-month windows \u2014 regardless of YTD or 1-year \u2014 price \u2265 $1. Worst 9M first.</div>'
     + (redRows.length
       ? '<div class="gwrap"><table class="gtable"><thead><tr>'
         + sortableTh("red","t","TICKER") + sortableTh("red","sector","SECTOR")
@@ -1319,7 +1319,7 @@ function render(){
     + sectionHTML("returnSelector","03","Stock Return Selector", 0, returnSelectorBody)
     + sectionHTML("stars","04","Star Gainers", state.selected.stars.size, starsBody)
     + sectionHTML("multi","05","Tickers Listed Above Multiple Times", 0, multiBody)
-    + sectionHTML("red","06","Shorts - All Red All Year", 0, redBody)
+    + sectionHTML("red","06","Shorts - All Red", 0, redBody)
     + '<div class="spacer"></div>';
 }
 
