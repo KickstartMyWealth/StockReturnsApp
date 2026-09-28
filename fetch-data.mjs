@@ -243,12 +243,14 @@ async function main() {
     // date or over a full year (and recent IPOs have neither). They're still
     // shown when available. 2M and 9M need a history fetch, so they're
     // checked in the second pass after attachExtraReturns below. No top-N
-    // cap: the section is meant to hold any ticker that qualifies.
+    // cap: the section is meant to hold any ticker that qualifies. Values are
+    // tested as displayed (1 decimal), so a -0.03% reading that shows as 0.0%
+    // doesn't sneak into a list that claims to be all red.
     allRed = Object.entries(map)
       .map(([t, v]) => ({ t, sector: v.sector || null, price: P(v.price), w: P(v.ch1w), m1: P(v.ch1m), m3: P(v.ch3m), m6: P(v.ch6m), ytd: P(v.chYTD), y1: P(v.ch1y), day: P(v.change), volume: Number(v.volume) }))
       .filter(r => r.price >= 1
         && Number.isFinite(r.volume) && r.volume >= MIN_VOLUME
-        && [r.w, r.m1, r.m3, r.m6].every(x => x != null && x < 0))
+        && [r.w, r.m1, r.m3, r.m6].every(x => x != null && +x.toFixed(1) < 0))
       .sort((a, b) => a.m6 - b.m6) // worst 6M first (order is cosmetic; the client re-sorts)
       .map(({ volume, ...r }) => ({ ...r, price: +r.price.toFixed(2), w: +r.w.toFixed(1), m1: +r.m1.toFixed(1), m3: +r.m3.toFixed(1), m6: +r.m6.toFixed(1), ytd: r.ytd != null ? +r.ytd.toFixed(1) : null, y1: r.y1 != null ? +r.y1.toFixed(1) : null, day: r.day != null ? +r.day.toFixed(1) : null }));
     if (!allRed.length) allRed = null;
