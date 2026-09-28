@@ -237,17 +237,20 @@ async function main() {
       .map(({ volume, ...r }) => ({ ...r, price: +r.price.toFixed(2), w: +r.w.toFixed(1), m1: +r.m1.toFixed(1), m3: +r.m3.toFixed(1), m6: +r.m6.toFixed(1), ytd: +r.ytd.toFixed(1), y1: +r.y1.toFixed(1), day: r.day != null ? +r.day.toFixed(1) : null }));
     if (!allGreen.length) allGreen = null;
 
-    // ---- Shorts - All Red All Year: negative across 5D, 1M, 3M, 6M, YTD, 1Y ----
-    // Mirror of All Green; -100% is already a natural floor for a losing
-    // stock, so no sanity cap is needed here the way the upside had one.
+    // ---- Shorts - All Red: consistently negative across 5D, 1M, 2M, 3M, 6M, 9M ----
+    // YTD and 1Y are deliberately NOT part of the test — a name can be
+    // weak across every recent window regardless of where it sits year-to-
+    // date or over a full year (and recent IPOs have neither). They're still
+    // shown when available. 2M and 9M need a history fetch, so they're
+    // checked in the second pass after attachExtraReturns below. No top-N
+    // cap: the section is meant to hold any ticker that qualifies.
     allRed = Object.entries(map)
       .map(([t, v]) => ({ t, sector: v.sector || null, price: P(v.price), w: P(v.ch1w), m1: P(v.ch1m), m3: P(v.ch3m), m6: P(v.ch6m), ytd: P(v.chYTD), y1: P(v.ch1y), day: P(v.change), volume: Number(v.volume) }))
       .filter(r => r.price >= 1
         && Number.isFinite(r.volume) && r.volume >= MIN_VOLUME
-        && [r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].every(x => x != null && x < 0))
-      .sort((a, b) => a.ytd - b.ytd) // worst YTD first
-      .slice(0, 50)
-      .map(({ volume, ...r }) => ({ ...r, price: +r.price.toFixed(2), w: +r.w.toFixed(1), m1: +r.m1.toFixed(1), m3: +r.m3.toFixed(1), m6: +r.m6.toFixed(1), ytd: +r.ytd.toFixed(1), y1: +r.y1.toFixed(1), day: r.day != null ? +r.day.toFixed(1) : null }));
+        && [r.w, r.m1, r.m3, r.m6].every(x => x != null && x < 0))
+      .sort((a, b) => a.m6 - b.m6) // worst 6M first (order is cosmetic; the client re-sorts)
+      .map(({ volume, ...r }) => ({ ...r, price: +r.price.toFixed(2), w: +r.w.toFixed(1), m1: +r.m1.toFixed(1), m3: +r.m3.toFixed(1), m6: +r.m6.toFixed(1), ytd: r.ytd != null ? +r.ytd.toFixed(1) : null, y1: r.y1 != null ? +r.y1.toFixed(1) : null, day: r.day != null ? +r.day.toFixed(1) : null }));
     if (!allRed.length) allRed = null;
 
     // ---- 1 Month Gainers: 1M return > 10%, sorted by 1M descending ----
@@ -301,8 +304,8 @@ async function main() {
       allGreen = allGreen.filter(r => r.m2 != null && r.m2 > 0 && r.m9 != null && r.m9 > 0);
       if (!allGreen.length) allGreen = null;
     }
-    // Same fix, mirrored: "Shorts - All Red All Year" should be red across
-    // every window too, including 2M and 9M, for the identical reason above.
+    // Same idea, mirrored: "Shorts - All Red" must be red on 2M and 9M too,
+    // for the identical reason above (final list: 5D, 1M, 2M, 3M, 6M, 9M).
     if (allRed) {
       allRed = allRed.filter(r => r.m2 != null && r.m2 < 0 && r.m9 != null && r.m9 < 0);
       if (!allRed.length) allRed = null;
