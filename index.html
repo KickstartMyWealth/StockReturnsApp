@@ -391,7 +391,7 @@ async function fetchAllReturns(onProgress){
  *  STATE
  * ================================================================ */
 const state = {
-  expanded: { country:false, sector:false, foundation:false, all:false, returnSelector:false, stars:false, red:false, multi:false },
+  expanded: { country:false, sector:false, foundation:false, all:false, returnSelector:false, stars:false, multi:false },
   selected: { country:new Set(), sector:new Set(), foundation:new Set(), stars:new Set() },
   family: "Schwab",
   timeframe: null,
@@ -413,14 +413,12 @@ const state = {
   returnBucketFilter: null, // "30-50%" | "50-75%" | "75-100%" | "100%+" | null (section 03 bucket filter)
   returnSelectorCategoryFilters: new Set(), // subset of "etfs"/"leveraged"/"green"/"month1" — section 03's category filters, AND'd together when more than one is selected; empty merges stocks + ETFs + All Green + 1M Gainers stocks, deduped by ticker (default)
   returnSelectorSectorFilter: null, // null | a GICS sector string — section 03's sector filter (ETF rows have no sector, so they're excluded whenever a sector is picked)
-  redSectorFilter: null, // null | a sector string — section 06's sector filter (same behavior as section 03's)
-  momentumFilter: { foundation:null, all:null, returnSelector:null, stars:null, red:null, multi:null, search:null }, // "3 Ups" | "2 Ups" | "2 Downs" | "3 Downs" | null, per section
+  momentumFilter: { foundation:null, all:null, returnSelector:null, stars:null, multi:null, search:null }, // "3 Ups" | "2 Ups" | "2 Downs" | "3 Downs" | null, per section
   sort: {                // per-table client-side sort: { key, dir } — click a column header to change
     all: { key: "y1", dir: "desc" },
     returnSelector: { key: "y1", dir: "desc" },
     search: { key: "m3", dir: "desc" },
     stars: { key: "stars", dir: "desc" },
-    red: { key: "m1", dir: "asc" },
     multi: { key: "count", dir: "desc" },
   },
   searchReturns: {}    // period -> { TICKER: pct } when source === 'search'
@@ -469,7 +467,6 @@ function findListings(t){
   if (inArr(state.etf1YClub)) labels.push("ETFs");
   if (inArr(state.starGainers)) labels.push("Star Gainers");
   if (inArr(state.allGreen)) labels.push("All Green");
-  if (inArr(state.allRed)) labels.push("Shorts (All Red)");
   if (inArr(state.oneMonthGainers)) labels.push("1 Month Gainers");
   return labels;
 }
@@ -1253,38 +1250,6 @@ function render(){
         + pctTd(r.day, 1, 'today-col') + pctTd(r.w, 1, periodCellClass(r.w, r.m1, r.m2, 'w')) + pctTd(r.m1, 1, periodCellClass(r.w, r.m1, r.m2, 'm1')) + pctTd(r.m2, 1, periodCellClass(r.w, r.m1, r.m2, 'm2')) + [r.m3, r.m6, r.m9, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
         + '</tr>').join('')
     + '</tbody></table></div>';
-  const redSectorCounts = {};
-  for (const r of (state.allRed || [])) if (r.sector) redSectorCounts[r.sector] = (redSectorCounts[r.sector] || 0) + 1;
-  const RED_SECTORS = Object.keys(redSectorCounts).sort();
-  const redRows = (state.allRed || [])
-    .filter(r => !state.redSectorFilter || r.sector === state.redSectorFilter)
-    .filter(r => matchesMomentumFilter(state.momentumFilter.red, r.w, r.m1, r.m2));
-  const redHasAnyFilter = !!state.redSectorFilter || !!state.momentumFilter.red;
-  const redBody =
-    (redRows.length
-      ? '<div class="group-label">' + freshnessLabel() + '</div>'
-      : redHasAnyFilter
-        ? '<div class="group-label" style="color:var(--rust)">No results with filters found</div>'
-        : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
-    + momentumPillsHTML("red", state.momentumFilter.red, ["2 Downs", "3 Downs"],
-        '<select id="redSectorSelect" style="font-family:var(--mono);font-size:12px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);">'
-        + '<option value="">All Sectors</option>'
-        + RED_SECTORS.map(sec => '<option value="'+esc(sec)+'"'+(sec===state.redSectorFilter?' selected':'')+'>'+esc(sec)+' ('+redSectorCounts[sec]+')</option>').join('')
-        + '</select>')
-    + '<div class="note">Stocks consistently negative across the 5-day, 1-month, 2-month, 3-month, 6-month, and 9-month windows \u2014 regardless of YTD or 1-year \u2014 price \u2265 $1. Worst 1M first.</div>'
-    + (redRows.length
-      ? '<div class="gwrap"><table class="gtable"><thead><tr>'
-        + sortableTh("red","t","TICKER") + sortableTh("red","sector","SECTOR")
-        + sortableTh("red","day","TODAY","today-col") + sortableTh("red","w","5D") + sortableTh("red","m1","1M")
-        + sortableTh("red","m2","2M") + sortableTh("red","m3","3M") + sortableTh("red","m6","6M") + sortableTh("red","m9","9M") + sortableTh("red","ytd","YTD") + sortableTh("red","y1","1Y")
-        + '</tr></thead><tbody>'
-        + sortRows(redRows, state.sort.red.key, state.sort.red.dir).map(r =>
-            '<tr><td' + tickerClass(r.w, r.m1, r.m2) + '>' + esc(r.t) + '</td>'
-            + '<td title="' + esc(r.sector || '\u2014') + '" style="text-align:left;color:var(--ink-faint);font-size:10.5px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(r.sector || '\u2014') + '</td>'
-            + pctTd(r.day, 1, 'today-col') + pctTd(r.w, 1, periodCellClass(r.w, r.m1, r.m2, 'w')) + pctTd(r.m1, 1, periodCellClass(r.w, r.m1, r.m2, 'm1')) + pctTd(r.m2, 1, periodCellClass(r.w, r.m1, r.m2, 'm2')) + [r.m3, r.m6, r.m9, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
-            + '</tr>').join('')
-        + '</tbody></table></div>'
-      : '');
   const multiRows = (state.multiListed || []).filter(r => matchesMomentumFilter(state.momentumFilter.multi, r.w, r.m1, r.m2));
   const multiBody =
     (multiRows.length
@@ -1334,7 +1299,6 @@ function render(){
     + sectionHTML("returnSelector","03","Stock Return Selector", 0, returnSelectorBody)
     + sectionHTML("stars","04","Star Gainers", state.selected.stars.size, starsBody)
     + sectionHTML("multi","05","Tickers Listed Above Multiple Times", 0, multiBody)
-    + sectionHTML("red","06","Shorts - All Red", 0, redBody)
     + '<div class="spacer"></div>';
 }
 
@@ -1406,9 +1370,6 @@ document.addEventListener("input", e => {
 document.addEventListener("change", e => {
   if (e.target && e.target.id === "returnSelectorSectorSelect"){
     state.returnSelectorSectorFilter = e.target.value || null;
-    render();
-  } else if (e.target && e.target.id === "redSectorSelect"){
-    state.redSectorFilter = e.target.value || null;
     render();
   }
 });
