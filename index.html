@@ -391,7 +391,7 @@ async function fetchAllReturns(onProgress){
  *  STATE
  * ================================================================ */
 const state = {
-  expanded: { country:false, sector:false, foundation:false, all:false, returnSelector:false, stars:false, hot:false, multi:false },
+  expanded: { search:false, country:false, sector:false, foundation:false, all:false, returnSelector:false, stars:false, hot:false, multi:false },
   selected: { country:new Set(), sector:new Set(), foundation:new Set(), stars:new Set() },
   family: "Schwab",
   timeframe: null,
@@ -696,8 +696,8 @@ function syncFiltersToPrimaryResult(){
     : null;
 }
 
-async function performSearch(){
-  const input = $("#searchInput");
+async function performSearch(inputId){
+  const input = $("#" + (inputId || "searchInput"));
   const q = input ? input.value : state.search.query;
   if (!q || !q.trim()) return;
   state.search.query = q;
@@ -1103,14 +1103,14 @@ function render(){
   const verdictHTML = verdict
     ? '<div style="font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:1px;color:' + verdictColor + ';padding-bottom:6px;">' + verdictLabel + '</div>'
     : '';
-  const searchBody =
+  const buildSearchBody = inputId =>
     '<div class="group-label">LIVE SEARCH</div>'
     + '<div class="note">Search any US-listed stock or ETF by ticker or company name. Companies with multiple share classes (e.g. Alphabet\u2019s GOOGL/GOOG) return every class.</div>'
     + verdictHTML
     + '<div class="pills" style="align-items:center;flex-wrap:nowrap;">'
-    + '<input id="searchInput" type="text" placeholder="e.g. ServiceNow or NOW" value="' + esc(state.search.query || '') + '" '
+    + '<input id="' + inputId + '" type="text" placeholder="e.g. ServiceNow or NOW" value="' + esc(state.search.query || '') + '" '
       + 'style="flex:1;min-width:0;font-family:var(--mono);font-size:13px;padding:8px 12px;border:1.5px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);" />'
-    + '<button class="pill" data-action="doSearch" style="border-color:var(--gold);background:var(--gold-soft);color:var(--teal);flex-shrink:0;">Search</button>'
+    + '<button class="pill" data-action="doSearch" data-input="' + inputId + '" style="border-color:var(--gold);background:var(--gold-soft);color:var(--teal);flex-shrink:0;">Search</button>'
     + '<button class="pill" data-action="clearSearch" style="flex-shrink:0;">Clear</button>'
     + '</div>'
     + (state.search.loading ? '<div class="note">Searching…</div>' : '')
@@ -1143,6 +1143,8 @@ function render(){
       : '')
     + (state.search.chartLoading ? '<div class="note" style="margin-top:8px;">Loading 3-month chart\u2026</div>' : '')
     + (state.search.chart ? '<div style="margin-top:6px;">' + renderChartSVG(state.search.chart) + '</div>' : '');
+  const searchBody = buildSearchBody("searchInput");
+  const searchBody7 = buildSearchBody("searchInput7");
 
   const returnSectorCounts = {};
   const returnSectorSeen = new Set();
@@ -1333,6 +1335,7 @@ function render(){
     + sectionHTML("stars","04","Star Gainers", state.selected.stars.size, starsBody)
     + sectionHTML("hot","05","Hot Plays", 0, hotBody)
     + sectionHTML("multi","06","Tickers Listed Above Multiple Times", 0, multiBody)
+    + sectionHTML("search","07","Search Ticker Against Benchmark", 0, searchBody7)
     + '<div class="spacer"></div>';
 }
 
@@ -1349,7 +1352,7 @@ document.addEventListener("click", e => {
   }
   const a = el.dataset.action;
   if (a === "doSearch"){
-    performSearch();
+    performSearch(el.dataset.input);
     return;
   } else if (a === "clearSearch"){
     state.search = { query: "", loading: false, error: null, result: null, chart: null, chartLoading: false };
@@ -1399,7 +1402,7 @@ $("#refreshBtn").addEventListener("click", () => loadData(true));
 // Keep the search box's typed value in state (without a full re-render per
 // keystroke) so it survives re-renders triggered by unrelated actions.
 document.addEventListener("input", e => {
-  if (e.target && e.target.id === "searchInput") state.search.query = e.target.value;
+  if (e.target && (e.target.id === "searchInput" || e.target.id === "searchInput7")) state.search.query = e.target.value;
   });
 document.addEventListener("change", e => {
   if (e.target && e.target.id === "returnSelectorSectorSelect"){
@@ -1416,9 +1419,9 @@ document.addEventListener("click", e => {
   }
 });
 document.addEventListener("keydown", e => {
-  if (e.key === "Enter" && e.target && e.target.id === "searchInput"){
+  if (e.key === "Enter" && e.target && (e.target.id === "searchInput" || e.target.id === "searchInput7")){
     e.preventDefault();
-    performSearch();
+    performSearch(e.target.id);
   }
 });
 
