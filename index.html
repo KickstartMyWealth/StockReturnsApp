@@ -406,7 +406,7 @@ const state = {
   allRed: null,        // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
   oneMonthGainers: null, // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
   hotPlaysFilter: null, // "AI" | "Mining" | "Oil" | "Defense" | null (section 05 category filter)
-  aiPlays: null, miningPlays: null, oilPlays: null, defensePlay: null, // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
+  aiPlays: null, miningPlays: null, oilPlays: null, defensePlay: null, cryptoPlays: null, miscPlays: null, // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
   multiListed: null,   // [{t, price, w, m1, m3, m6, ytd, y1, count, inLists}] from data.json
   etf1YClub: null,      // [{t, n, price, day, w, m1, m3, m6, ytd, y1}] from data.json — whole-ETF-market screen
   stockReturnSelector: null, // [{t, sector, price, day, w, m1, m3, m6, ytd, y1}] from data.json — stocks up 30%+ YTD, bucketed on the client
@@ -953,8 +953,8 @@ function pillsHTML(items, selectedLabel, action){
 // pattern matches one of the four ticker-highlight states (see tickerClass
 // above). Reuses that same classification so "3 Ups" selects exactly the
 // tickers whose box is highlighted green, etc.
-const HOT_CATEGORIES = ["AI", "Mining", "Oil", "Defense"];
-const HOT_CATEGORY_KEYS = { "AI":"aiPlays", "Mining":"miningPlays", "Oil":"oilPlays", "Defense":"defensePlay" };
+const HOT_CATEGORIES = ["AI", "Mining", "Oil", "Defense", "Crypto", "Misc"];
+const HOT_CATEGORY_KEYS = { "AI":"aiPlays", "Mining":"miningPlays", "Oil":"oilPlays", "Defense":"defensePlay", "Crypto":"cryptoPlays", "Misc":"miscPlays" };
 const MOMENTUM_FILTERS = ["3 Ups", "2 Ups", "2 Downs", "3 Downs"];
 const MOMENTUM_FILTER_CLASS = { "3 Ups":"mom-pos", "2 Ups":"mom-trend", "2 Downs":"mom-warn", "3 Downs":"mom-neg" };
 // A fund counts as "leveraged" for the Leveraged ETFs toggle if its name
@@ -1454,6 +1454,8 @@ async function loadData(force){
         miningPlays: j.miningPlays || null,
         oilPlays: j.oilPlays || null,
         defensePlay: j.defensePlay || null,
+        cryptoPlays: j.cryptoPlays || null,
+        miscPlays: j.miscPlays || null,
         oneMonthGainers: j.oneMonthGainers || null,
         multiListed: j.multiListed || null,
         etf1YClub: j.etf1YClub || null,
