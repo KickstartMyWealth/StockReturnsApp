@@ -17,6 +17,15 @@ const UNIQUE_TICKERS = [
   "SPY","IWM","DIA" // benchmarks for the Search section's comparison rows (QQQ already tracked above)
 ];
 
+// ---- Hot Plays: hand-picked ticker groups for section 05. Edit these lists to add/remove names;
+// the daily run looks each one up in the whole-market screens and writes data.json keys aiPlays/miningPlays/oilPlays/defensePlay.
+const HOT_PLAYS = {
+  aiPlays: ["AAPL", "ACLS", "ACMR", "ADBE", "ADI", "AEHR", "AIQ", "ALAB", "ALGM", "ALMU", "AMAT", "AMBQ", "AMD", "AMKR", "AMZ", "AMZN", "ANET", "AOSL", "APLD", "ARM", "ASMH", "ASML", "ASX", "ASYS", "AVGO", "AXTI", "BOTZ", "CAMT", "CHAT", "CHIP", "CHPS", "COHU", "CORZ", "CRDO", "CRM", "CRWD", "CRWV", "CVV", "DELL", "DRAM", "FTXL", "GCTS", "GFS", "GOOG", "GTOP", "IBM", "ICHR", "IGPT", "IMOS", "INTC", "INTT", "IREN", "KLAC", "KOPN", "LFUS", "LRCX", "LSCC", "LUMN", "LWLG", "MCHP", "META", "MKSI", "MRAM", "MRVL", "MSFT", "MTSI", "MTZ", "MU", "MX", "MXL", "MYRG", "NOK", "NOW", "NVDA", "NVMI", "NVTS", "NXPI", "ON", "ONTO", "ORCL", "OSS", "PANW", "PDFS", "PENG", "PLTR", "PLXS", "POWI", "PSI", "QCOM", "QQQM", "QRVO", "QUIK", "SANM", "SEDG", "SHOC", "SHOP", "SIMO", "SITM", "SMTC", "SNDK", "SNOW", "SOXX", "STM", "STX", "SYNA", "TE", "TER", "TOYO", "TRT", "TSEM", "TSLA", "TSM", "TSMC", "TTMI", "TXN", "UCTT", "UMC", "VECO", "WDC", "WOLF"],
+  miningPlays: ["AEM", "AG", "ALTO", "AU", "DRD", "EQX", "EXK", "FCX", "FNV", "FURY", "HBM", "HMY", "HYMC", "IAG", "KGC", "MAKO", "NEM", "NEXA", "RIO", "SVM", "VALE"],
+  oilPlays: ["AGRO", "AP", "APA", "AR", "ARLP", "AROC", "ATO", "BEP", "BNO", "BP", "BTU", "BWLP", "C", "CEG", "CF", "CHRD", "CNQ", "CNR", "COP", "CRC", "CRGY", "CTVA", "CVE", "CVX", "CWEN", "DINO", "DLNG", "DTM", "DVN", "E", "EC", "ECG", "EGY", "EMA", "EME", "ENB", "ENLT", "EOG", "EPD", "EQNR", "EQT", "ESOA", "ET", "FANG", "FE", "FTAI", "GASS", "GEV", "GFR", "GFS", "GPRK", "HAL", "IMO", "KEN", "KGS", "KMI", "KOS", "LBRT", "LNG", "LTBR", "MGY", "MPC", "MTDR", "MUR", "NC", "NCSM", "NE", "NFG", "NRG", "NVT", "OBE", "ON", "OVV", "OXY", "PBF", "PBR", "PDS", "PR", "PSX", "PTEN", "PWR", "REI", "REPX", "REX", "RIG", "RRC", "SANM", "SDRL", "SHEL", "SOBO", "SU", "SUN", "TALO", "TBN", "TS", "TTE", "UEC", "USAC", "VET", "VIST", "VLO", "VST", "WATT", "WDS", "WLK", "WTI", "WWD", "YPF"],
+  defensePlay: ["AIRO", "ARXS", "ASTS", "ATI", "ATRO", "AVAV", "AXON", "BA", "BAESF", "BAH", "BWXT", "CDRE", "CRS", "CW", "DCO", "DRS", "EADSF", "ECVT", "ESLT", "FLY", "GD", "GE", "HAWK", "HII", "HWM", "IBOT", "ISSC", "ITA", "KRMN", "KTOS", "LHX", "LMT", "LUNR", "MDA", "MRCY", "NOC", "NSKFF", "ONDS", "ORBX", "PKE", "PL", "RCAT", "RKLB", "RNMBF", "RNMBY", "RTX", "SATL", "SIF", "SPCE", "SPCX", "SWMR", "TATT", "THLLY", "TLN", "UFO", "UMAC", "VOYG", "VVX", "WARP"],
+};
+
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36";
 const YAHOO = t => `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(t)}?range=1y&interval=1d`;
 const STOOQ = t => `https://stooq.com/q/d/l/?s=${t.toLowerCase()}.us&i=d`;
@@ -151,10 +160,12 @@ async function main() {
   }));
 
   // ---- Whole-market screen: 100%+ Club and Star Gainers in one call ----
+  let stockMap = {};
   let club = null, clubSource = null, starGainers = null, starsState = null, allGreen = null, allRed = null, oneMonthGainers = null, multiListed = null, stockReturnSelector = null;
   try {
     const j = await fetchJSON(SCREEN_URL);
     const map = j?.data?.data || {};
+    stockMap = map;
 
     // 100% Club: YTD >= 100% OR 1-year return >= 100%, price >= $1. Each
     // metric has its own sanity cap to exclude reverse-split-style data
@@ -350,9 +361,11 @@ async function main() {
   // in stockReturnSelector above — not just "100%+" funds, so an ETF like
   // SLV or XBI with a solid but sub-100% 1-year return still shows up. ----
   let etf1YClub = null;
+  let etfMap = {};
   try {
     const j = await fetchJSON(ETF_SCREEN_URL);
     const map = j?.data?.data || {};
+    etfMap = map;
     // Leveraged/inverse ETFs can legitimately post very large 1-year moves
     // (verified live: 2x/3x sector and single-stock ETFs over 1000%), so
     // this cap is only a defensive guard against outright data errors.
@@ -371,6 +384,26 @@ async function main() {
     console.warn("ETF market screen failed:", e.message);
   }
 
+  // ---- Hot Plays (section 05): look each hand-picked ticker up in the stock
+  // screen, falling back to the ETF screen. Tickers missing from both are skipped.
+  const hotPlays = {};
+  try {
+    const RH = x => { const n = Number(x); return Number.isFinite(n) ? +n.toFixed(1) : null; };
+    for (const [key, tickers] of Object.entries(HOT_PLAYS)) {
+      const rows = [];
+      for (const t of tickers) {
+        const v = stockMap[t] || etfMap[t];
+        if (!v || !Number.isFinite(Number(v.price))) continue;
+        rows.push({ t, sector: v.sector || null, price: +Number(v.price).toFixed(2),
+          day: RH(v.change), w: RH(v.ch1w), m1: RH(v.ch1m), m3: RH(v.ch3m), m6: RH(v.ch6m), ytd: RH(v.chYTD), y1: RH(v.ch1y) });
+      }
+      hotPlays[key] = rows.length ? rows : null;
+    }
+    await attachExtraReturns(Object.values(hotPlays));
+  } catch (e) {
+    console.warn("Hot Plays failed:", e.message);
+  }
+
   const dates = Object.values(returns).map(r => r.asOf).sort();
   const payload = {
     generatedAt: new Date().toISOString(),
@@ -387,6 +420,7 @@ async function main() {
     multiListed,
     etf1YClub,
     stockReturnSelector,
+    ...hotPlays,
   };
   writeFileSync("data.json", JSON.stringify(payload));
   console.log(`Wrote data.json — ${Object.keys(returns).length} tickers ok, ${failed} failed, club: ${club ? club.length : "unavailable"}, stars: ${starGainers ? starGainers.length : "unavailable"}, green: ${allGreen ? allGreen.length : "unavailable"}, red: ${allRed ? allRed.length : "unavailable"}, oneMonth: ${oneMonthGainers ? oneMonthGainers.length : "unavailable"}, multiListed: ${multiListed ? multiListed.length : "unavailable"}, etf1YClub: ${etf1YClub ? etf1YClub.length : "unavailable"}, stockReturnSelector: ${stockReturnSelector ? stockReturnSelector.length : "unavailable"}`);
