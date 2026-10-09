@@ -337,7 +337,7 @@ async function main() {
     // a buy signal. Overlap across bullish screens is a stronger signal
     // than any single list on its own.
     const CATS = { club: club || [], stars: starGainers || [], green: allGreen || [], month1: oneMonthGainers || [] };
-    const CAT_LABEL = { club: "100%", stars: "Stars", green: "Green", month1: "1M" };
+    const CAT_LABEL = { club: "YTD", stars: "Stars", green: "Green", month1: "1M" };
     const tickerCats = {}, tickerData = {};
     for (const [cat, rows] of Object.entries(CATS)) {
       for (const r of rows) {
