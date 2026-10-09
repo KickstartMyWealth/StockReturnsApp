@@ -1286,7 +1286,8 @@ function render(){
     '<button class="pill'+(state.hotPlaysFilter===cat?' selected':'')+'" data-hot-category="'+esc(cat)+'">'+esc(cat)+'</button>'
   ).join('');
   const hotBody =
-    (hotAll.length
+    '<div class="note">Human compiled list, could be wrong. No stocks list with 1 year less than 30%.</div>'
+    + (hotAll.length
       ? '<div class="group-label">' + freshnessLabel() + '</div>'
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
     + '<div class="pills">' + hotCatPills + '</div>'
