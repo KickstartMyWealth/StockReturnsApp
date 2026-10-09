@@ -391,7 +391,7 @@ async function fetchAllReturns(onProgress){
  *  STATE
  * ================================================================ */
 const state = {
-  expanded: { country:false, sector:false, foundation:false, all:false, returnSelector:false, stars:false, multi:false },
+  expanded: { country:false, sector:false, foundation:false, all:false, returnSelector:false, stars:false, hot:false, multi:false },
   selected: { country:new Set(), sector:new Set(), foundation:new Set(), stars:new Set() },
   family: "Schwab",
   timeframe: null,
@@ -1298,7 +1298,8 @@ function render(){
     + sectionHTML("all","02","Base ETFs, Country, Sectors", 0, allBody)
     + sectionHTML("returnSelector","03","Stock Return Selector", 0, returnSelectorBody)
     + sectionHTML("stars","04","Star Gainers", state.selected.stars.size, starsBody)
-    + sectionHTML("multi","05","Tickers Listed Above Multiple Times", 0, multiBody)
+    + sectionHTML("hot","05","Hot Plays", 0, '<div class="note">Coming soon.</div>')
+    + sectionHTML("multi","06","Tickers Listed Above Multiple Times", 0, multiBody)
     + '<div class="spacer"></div>';
 }
 
