@@ -19,6 +19,8 @@ const UNIQUE_TICKERS = [
 
 // ---- Hot Plays: hand-picked ticker groups for section 05. Edit these lists to add/remove names;
 // the daily run looks each one up in the whole-market screens and writes data.json keys aiPlays/miningPlays/oilPlays/defensePlay.
+// Hot Plays only lists names with a 1-year return of at least this many percent (checked on every run).
+const HOT_MIN_Y1 = 30;
 const HOT_PLAYS = {
   aiPlays: ["AAOI", "AAPL", "ACLS", "ACMR", "ADBE", "ADI", "AEHR", "AEIS", "AI", "AIP", "AIQ", "ALAB", "ALGM", "ALMU", "AMAT", "AMBQ", "AMD", "AMKR", "AMZ", "AMZN", "ANET", "AOSL", "APLD", "ARM", "ASMH", "ASML", "ASX", "ASYS", "ATOM", "AVGO", "AXTI", "BNAI", "BOTZ", "CAMT", "CHAT", "CHIP", "CHPS", "CIEN", "CLS", "COHR", "COHU", "CORZ", "CRDO", "CRM", "CRWD", "CRWV", "CVV", "DELL", "DOCN", "DRAM", "FTXL", "GCTS", "GFS", "GLW", "GOOG", "GTOP", "IBM", "ICHR", "IDAI", "IGPT", "IMOS", "INTC", "INTT", "IREN", "JBL", "KLAC", "KOPN", "LFUS", "LITE", "LRCX", "LSCC", "LUMN", "LWLG", "MCHP", "META", "MKSI", "MOVE", "MRAM", "MRVL", "MSFT", "MTSI", "MTZ", "MU", "MX", "MXL", "MYRG", "NBIS", "NOK", "NOW", "NVDA", "NVMI", "NVTS", "NXPI", "ON", "ONTO", "ORCL", "OSS", "PANW", "PDFS", "PENG", "PLTR", "PLXS", "POWI", "PSI", "QCOM", "QQQM", "QRVO", "QUIK", "SANM", "SEDG", "SHOC", "SHOP", "SIMO", "SITM", "SKYT", "SMTC", "SNDK", "SNOW", "SOXX", "STM", "STX", "SYNA", "TE", "TER", "TOYO", "TRT", "TSEM", "TSLA", "TSM", "TSMC", "TTMI", "TXN", "UCTT", "UMC", "VECO", "VICR", "VRT", "WDC", "WOLF"],
   miningPlays: ["AEM", "AG", "ALM", "ALTO", "AP", "ASM", "AU", "B", "CC", "CENX", "CIFR", "CSTM", "DC", "DRD", "EGO", "ELVR", "EMAT", "EMBJ", "ENLT", "EQX", "ERO", "EXK", "FCX", "FNV", "FURY", "GAU", "GFI", "GLD", "GOLD", "HBM", "HCC", "HMY", "HYMC", "IAG", "IVPAF", "KGC", "LAR", "MAKO", "METC", "MP", "MT", "MTA", "MTRN", "MUX", "NEM", "NEXA", "NG", "NIOBW", "NUE", "PPTA", "REMX", "RIO", "SGML", "SPX", "STLD", "SVM", "THM", "TX", "VALE"],
@@ -397,6 +399,8 @@ async function main() {
       for (const t of tickers) {
         const v = stockMap[t] || etfMap[t];
         if (!v || !Number.isFinite(Number(v.price))) continue;
+        const y1raw = Number(v.ch1y);
+        if (Number.isFinite(y1raw) && y1raw < HOT_MIN_Y1) continue; // below the 1Y floor; names with no 1Y figure (new listings) are kept
         rows.push({ t, sector: v.sector || null, price: +Number(v.price).toFixed(2),
           day: RH(v.change), w: RH(v.ch1w), m1: RH(v.ch1m), m3: RH(v.ch3m), m6: RH(v.ch6m), ytd: RH(v.chYTD), y1: RH(v.ch1y) });
       }
