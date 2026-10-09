@@ -405,6 +405,8 @@ const state = {
   allGreen: null,      // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
   allRed: null,        // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
   oneMonthGainers: null, // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
+  hotPlaysFilter: null, // "AI" | "Mining" | "Oil" | "Defense" | null (section 05 category filter)
+  aiPlays: null, miningPlays: null, oilPlays: null, defensePlay: null, // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
   multiListed: null,   // [{t, price, w, m1, m3, m6, ytd, y1, count, inLists}] from data.json
   etf1YClub: null,      // [{t, n, price, day, w, m1, m3, m6, ytd, y1}] from data.json — whole-ETF-market screen
   stockReturnSelector: null, // [{t, sector, price, day, w, m1, m3, m6, ytd, y1}] from data.json — stocks up 30%+ YTD, bucketed on the client
@@ -413,13 +415,14 @@ const state = {
   returnBucketFilter: null, // "30-50%" | "50-75%" | "75-100%" | "100%+" | null (section 03 bucket filter)
   returnSelectorCategoryFilters: new Set(), // subset of "etfs"/"leveraged"/"green"/"month1" — section 03's category filters, AND'd together when more than one is selected; empty merges stocks + ETFs + All Green + 1M Gainers stocks, deduped by ticker (default)
   returnSelectorSectorFilter: null, // null | a GICS sector string — section 03's sector filter (ETF rows have no sector, so they're excluded whenever a sector is picked)
-  momentumFilter: { foundation:null, all:null, returnSelector:null, stars:null, multi:null, search:null }, // "3 Ups" | "2 Ups" | "2 Downs" | "3 Downs" | null, per section
+  momentumFilter: { foundation:null, all:null, returnSelector:null, stars:null, multi:null, search:null, hot:null }, // "3 Ups" | "2 Ups" | "2 Downs" | "3 Downs" | null, per section
   sort: {                // per-table client-side sort: { key, dir } — click a column header to change
     all: { key: "y1", dir: "desc" },
     returnSelector: { key: "y1", dir: "desc" },
     search: { key: "m3", dir: "desc" },
     stars: { key: "stars", dir: "desc" },
     multi: { key: "count", dir: "desc" },
+    hot: { key: "y1", dir: "desc" },
   },
   searchReturns: {}    // period -> { TICKER: pct } when source === 'search'
 };
@@ -950,6 +953,8 @@ function pillsHTML(items, selectedLabel, action){
 // pattern matches one of the four ticker-highlight states (see tickerClass
 // above). Reuses that same classification so "3 Ups" selects exactly the
 // tickers whose box is highlighted green, etc.
+const HOT_CATEGORIES = ["AI", "Mining", "Oil", "Defense"];
+const HOT_CATEGORY_KEYS = { "AI":"aiPlays", "Mining":"miningPlays", "Oil":"oilPlays", "Defense":"defensePlay" };
 const MOMENTUM_FILTERS = ["3 Ups", "2 Ups", "2 Downs", "3 Downs"];
 const MOMENTUM_FILTER_CLASS = { "3 Ups":"mom-pos", "2 Ups":"mom-trend", "2 Downs":"mom-warn", "3 Downs":"mom-neg" };
 // A fund counts as "leveraged" for the Leveraged ETFs toggle if its name
@@ -1273,6 +1278,33 @@ function render(){
         + '</tbody></table></div>'
       : '');
 
+  const hotAll = [].concat(...HOT_CATEGORIES.map(cat => (state[HOT_CATEGORY_KEYS[cat]] || []).map(r => Object.assign({}, r, { category: cat }))));
+  const hotRows = hotAll
+    .filter(r => !state.hotPlaysFilter || r.category === state.hotPlaysFilter)
+    .filter(r => matchesMomentumFilter(state.momentumFilter.hot, r.w, r.m1, r.m2));
+  const hotCatPills = HOT_CATEGORIES.map(cat =>
+    '<button class="pill'+(state.hotPlaysFilter===cat?' selected':'')+'" data-hot-category="'+esc(cat)+'">'+esc(cat)+'</button>'
+  ).join('');
+  const hotBody =
+    (hotAll.length
+      ? '<div class="group-label">' + freshnessLabel() + '</div>'
+      : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
+    + '<div class="pills">' + hotCatPills + '</div>'
+    + momentumPillsHTML("hot", state.momentumFilter.hot)
+    + (hotRows.length
+      ? '<div class="gwrap"><table class="gtable"><thead><tr>'
+        + sortableTh("hot","t","TICKER") + sortableTh("hot","category","GROUP")
+        + sortableTh("hot","w","5D") + sortableTh("hot","m1","1M") + sortableTh("hot","m3","3M")
+        + sortableTh("hot","m6","6M") + sortableTh("hot","ytd","YTD") + sortableTh("hot","y1","1Y")
+        + '</tr></thead><tbody>'
+        + sortRows(hotRows, state.sort.hot.key, state.sort.hot.dir).map(r =>
+            '<tr><td' + tickerClass(r.w, r.m1, r.m2) + '>' + esc(r.t) + '</td>'
+            + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.category) + '</td>'
+            + [r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
+            + '</tr>').join('')
+        + '</tbody></table></div>'
+      : '');
+
   const activeFamily = state.family || "Schwab";
   const foundationBody =
     pillsHTML(FAMILIES, activeFamily, "family")
@@ -1298,7 +1330,7 @@ function render(){
     + sectionHTML("all","02","Base ETFs, Country, Sectors", 0, allBody)
     + sectionHTML("returnSelector","03","Stock Return Selector", 0, returnSelectorBody)
     + sectionHTML("stars","04","Star Gainers", state.selected.stars.size, starsBody)
-    + sectionHTML("hot","05","Hot Plays", 0, '<div class="note">Coming soon.</div>')
+    + sectionHTML("hot","05","Hot Plays", 0, hotBody)
     + sectionHTML("multi","06","Tickers Listed Above Multiple Times", 0, multiBody)
     + '<div class="spacer"></div>';
 }
@@ -1374,6 +1406,14 @@ document.addEventListener("change", e => {
     render();
   }
 });
+document.addEventListener("click", e => {
+  const b = e.target && e.target.closest && e.target.closest("[data-hot-category]");
+  if (b){
+    const cat = b.getAttribute("data-hot-category");
+    state.hotPlaysFilter = state.hotPlaysFilter === cat ? null : cat;
+    render();
+  }
+});
 document.addEventListener("keydown", e => {
   if (e.key === "Enter" && e.target && e.target.id === "searchInput"){
     e.preventDefault();
@@ -1410,6 +1450,10 @@ async function loadData(force){
         starGainers: j.starGainers || null,
         allGreen: j.allGreen || null,
         allRed: j.allRed || null,
+        aiPlays: j.aiPlays || null,
+        miningPlays: j.miningPlays || null,
+        oilPlays: j.oilPlays || null,
+        defensePlay: j.defensePlay || null,
         oneMonthGainers: j.oneMonthGainers || null,
         multiListed: j.multiListed || null,
         etf1YClub: j.etf1YClub || null,
