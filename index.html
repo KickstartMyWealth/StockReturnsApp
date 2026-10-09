@@ -1257,6 +1257,7 @@ function render(){
         + pctTd(r.day, 1, 'today-col') + pctTd(r.w, 1, periodCellClass(r.w, r.m1, r.m2, 'w')) + pctTd(r.m1, 1, periodCellClass(r.w, r.m1, r.m2, 'm1')) + pctTd(r.m2, 1, periodCellClass(r.w, r.m1, r.m2, 'm2')) + [r.m3, r.m6, r.m9, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
         + '</tr>').join('')
     + '</tbody></table></div>';
+  const hotPlaySet = new Set([].concat(...HOT_CATEGORIES.map(cat => (state[HOT_CATEGORY_KEYS[cat]] || []).map(x => x.t))));
   const multiRows = (state.multiListed || []).filter(r => matchesMomentumFilter(state.momentumFilter.multi, r.w, r.m1, r.m2));
   const multiBody =
     (multiRows.length
@@ -1274,7 +1275,7 @@ function render(){
         + sortRows(multiRows, state.sort.multi.key, state.sort.multi.dir).map(r =>
             '<tr><td' + tickerClass(r.w, r.m1, r.m2) + '>' + esc(r.t) + '</td>'
             + '<td title="' + esc(r.sector || '\u2014') + '" style="text-align:left;color:var(--ink-faint);font-size:10.5px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(r.sector || '\u2014') + '</td>'
-            + '<td>' + esc(r.inLists || '') + '</td>'
+            + '<td>' + esc((r.inLists || '') + (hotPlaySet.has(r.t) ? (r.inLists ? ', ' : '') + 'Plays' : '')) + '</td>'
             + pctTd(r.day, 1, 'today-col') + pctTd(r.w, 1, periodCellClass(r.w, r.m1, r.m2, 'w')) + pctTd(r.m1, 1, periodCellClass(r.w, r.m1, r.m2, 'm1')) + pctTd(r.m2, 1, periodCellClass(r.w, r.m1, r.m2, 'm2')) + [r.m3, r.m6, r.m9, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
             + '</tr>').join('')
         + '</tbody></table></div>'
