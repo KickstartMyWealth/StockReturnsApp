@@ -21,6 +21,11 @@ const UNIQUE_TICKERS = [
 // the daily run looks each one up in the whole-market screens and writes data.json keys aiPlays/miningPlays/oilPlays/defensePlay.
 // Hot Plays only lists names with a 1-year return of at least this many percent (checked on every run).
 const HOT_MIN_Y1 = 30;
+// Monthly scan log (section 08). Each month's scan adds a "YYYY-MM" key listing the
+// tickers it newly added to HOT_PLAYS; the app shows the most recent month.
+const NEW_ADDS = {
+  "2026-10": ["CMG", "AXP", "RL", "WSM", "JNJ", "LLY", "TMUS", "RCL", "EXPE", "CAT", "SCHW", "CB", "APO", "INCY", "FLEX", "PLAB", "XOM", "MRNA", "ILMN", "CMC", "LMND", "NU", "URBN", "CMCSA", "FREHF", "FLUT", "MSGS", "SLG", "DIS"],
+};
 const HOT_PLAYS = {
   aiPlays: ["AAOI", "AAPL", "ACLS", "ACMR", "ADI", "AEHR", "AEIS", "AIP", "AIQ", "ALAB", "ALGM", "ALMU", "AMAT", "AMBQ", "AMD", "AMKR", "AMZ", "AMZN", "ANET", "AOSL", "APLD", "ARKQ", "ARM", "ASMH", "ASML", "ASX", "ASYS", "ATOM", "AVGO", "AXTI", "BIDU", "BNAI", "BOTZ", "CAMT", "CHAT", "CHIP", "CHPS", "CIEN", "CLS", "COHR", "COHU", "CORZ", "CRDO", "CRWV", "CSCO", "CVV", "DELL", "DRAM", "DTCR", "FN", "FTXL", "GCTS", "GFS", "GLW", "GOOG", "GOOGL", "GTOP", "HPE", "IBM", "ICHR", "IGPT", "IMOS", "INOD", "INTC", "INTT", "IREN", "IYW", "JBL", "KLAC", "KOPN", "LFUS", "LITE", "LRCX", "LSCC", "LUMN", "LWLG", "MCHP", "META", "MKSI", "MOD", "MOVE", "MRAM", "MRVL", "MTSI", "MTZ", "MU", "MX", "MXL", "MYRG", "NBIS", "NOK", "NVDA", "NVMI", "NVTS", "NXPI", "ON", "ONTO", "OSS", "PDFS", "PENG", "PLXS", "POWI", "PSI", "QCOM", "QQQ", "QQQM", "QRVO", "QUIK", "RMBS", "SANM", "SEDG", "SHOC", "SIMO", "SITM", "SKYT", "SMCI", "SMH", "SMTC", "SNDK", "SOXX", "STM", "STX", "SYNA", "TASK", "TE", "TER", "TOYO", "TRT", "TSEM", "TSLA", "TSM", "TSMC", "TTMI", "TXN", "UCTT", "UMC", "VECO", "VGT", "VICR", "VRT", "WDC", "WOLF", "FLEX", "PLAB"],
   miningPlays: ["AEM", "AG", "ALM", "ALTO", "AP", "ASM", "AU", "B", "CC", "CENX", "CIFR", "COPX", "CSTM", "DC", "DEMRF", "DRD", "EGO", "ELVR", "EMAT", "EMBJ", "ENLT", "EQX", "ERO", "EXK", "FCX", "FNV", "FURY", "GAU", "GFI", "GLD", "GOLD", "HBM", "HCC", "HMY", "HYMC", "IAG", "IVPAF", "KGC", "LAR", "MAKO", "METC", "MP", "MT", "MTA", "MTRN", "MUX", "NEM", "NEXA", "NG", "NIOBW", "NUE", "PPTA", "REMX", "RIO", "SCCO", "SGML", "SPX", "STLD", "SVM", "THM", "TX", "USGO", "VALE"],
@@ -413,6 +418,27 @@ async function main() {
     console.warn("Hot Plays failed:", e.message);
   }
 
+  // ---- New adds this month (section 08): latest month in NEW_ADDS, all
+  // tickers shown even if under the 1Y floor (they may be hidden in 05/03).
+  let newAdds = null;
+  try {
+    const RH = x => { const n = Number(x); return Number.isFinite(n) ? +n.toFixed(1) : null; };
+    const LABEL = { aiPlays:"AI", miningPlays:"Mining", oilPlays:"Oil", defensePlay:"Defense", cryptoPlays:"Crypto", nuclearPlays:"Nuclear/Energy", quantumPlays:"Quantum", saasPlays:"SaaS", miscPlays:"Misc" };
+    const month = Object.keys(NEW_ADDS).sort().pop();
+    const rows = [];
+    for (const t of NEW_ADDS[month] || []) {
+      const v = stockMap[t] || etfMap[t];
+      if (!v || !Number.isFinite(Number(v.price))) continue;
+      const key = Object.keys(HOT_PLAYS).find(k => HOT_PLAYS[k].includes(t));
+      rows.push({ t, category: key ? LABEL[key] || key : "Misc", sector: v.sector || null, price: +Number(v.price).toFixed(2),
+        day: RH(v.change), w: RH(v.ch1w), m1: RH(v.ch1m), m3: RH(v.ch3m), m6: RH(v.ch6m), ytd: RH(v.chYTD), y1: RH(v.ch1y) });
+    }
+    await attachExtraReturns([rows]);
+    newAdds = month ? { month, total: (NEW_ADDS[month] || []).length, rows } : null;
+  } catch (e) {
+    console.warn("New adds failed:", e.message);
+  }
+
   const dates = Object.values(returns).map(r => r.asOf).sort();
   const payload = {
     generatedAt: new Date().toISOString(),
@@ -430,6 +456,7 @@ async function main() {
     etf1YClub,
     stockReturnSelector,
     ...hotPlays,
+    newAdds,
   };
   writeFileSync("data.json", JSON.stringify(payload));
   console.log(`Wrote data.json — ${Object.keys(returns).length} tickers ok, ${failed} failed, club: ${club ? club.length : "unavailable"}, stars: ${starGainers ? starGainers.length : "unavailable"}, green: ${allGreen ? allGreen.length : "unavailable"}, red: ${allRed ? allRed.length : "unavailable"}, oneMonth: ${oneMonthGainers ? oneMonthGainers.length : "unavailable"}, multiListed: ${multiListed ? multiListed.length : "unavailable"}, etf1YClub: ${etf1YClub ? etf1YClub.length : "unavailable"}, stockReturnSelector: ${stockReturnSelector ? stockReturnSelector.length : "unavailable"}`);
