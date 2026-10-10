@@ -391,7 +391,7 @@ async function fetchAllReturns(onProgress){
  *  STATE
  * ================================================================ */
 const state = {
-  expanded: { search:false, country:false, sector:false, foundation:false, all:false, returnSelector:false, stars:false, hot:false, multi:false },
+  expanded: { newAdds:false, search:false, country:false, sector:false, foundation:false, all:false, returnSelector:false, stars:false, hot:false, multi:false },
   selected: { country:new Set(), sector:new Set(), foundation:new Set(), stars:new Set() },
   family: "Schwab",
   timeframe: null,
@@ -406,7 +406,7 @@ const state = {
   allRed: null,        // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
   oneMonthGainers: null, // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
   hotPlaysFilter: null, // "AI" | "Mining" | "Oil" | "Defense" | null (section 05 category filter)
-  aiPlays: null, miningPlays: null, oilPlays: null, defensePlay: null, cryptoPlays: null, nuclearPlays: null, quantumPlays: null, saasPlays: null, miscPlays: null, // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
+  aiPlays: null, miningPlays: null, oilPlays: null, defensePlay: null, cryptoPlays: null, nuclearPlays: null, quantumPlays: null, saasPlays: null, miscPlays: null, newAdds: null, // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
   multiListed: null,   // [{t, price, w, m1, m3, m6, ytd, y1, count, inLists}] from data.json
   etf1YClub: null,      // [{t, n, price, day, w, m1, m3, m6, ytd, y1}] from data.json — whole-ETF-market screen
   stockReturnSelector: null, // [{t, sector, price, day, w, m1, m3, m6, ytd, y1}] from data.json — stocks up 30%+ YTD, bucketed on the client
@@ -423,6 +423,7 @@ const state = {
     stars: { key: "stars", dir: "desc" },
     multi: { key: "count", dir: "desc" },
     hot: { key: "y1", dir: "desc" },
+    newAdds: { key: "y1", dir: "desc" },
   },
   searchReturns: {}    // period -> { TICKER: pct } when source === 'search'
 };
@@ -1309,6 +1310,26 @@ function render(){
         + '</tbody></table></div>'
       : '');
 
+  const naRows = (state.newAdds && state.newAdds.rows) || [];
+  const naMonth = state.newAdds && state.newAdds.month
+    ? new Date(state.newAdds.month + '-01T12:00:00').toLocaleString('en-US', { month: 'long', year: 'numeric' }) : '';
+  const newAddsBody =
+    '<div class="note">Tickers added by the monthly scan of analyst and publisher picks (last 12 months). They are also placed in a Hot Plays filter and appear in 03 when they qualify. Shown here even if the 1 year return is under 30%, which hides them in 05.</div>'
+    + (naRows.length
+      ? '<div class="group-label">ADDED IN ' + esc(naMonth.toUpperCase()) + ' \u00b7 ' + naRows.length + ' OF ' + state.newAdds.total + ' FOUND IN DATA</div>'
+        + '<div class="gwrap"><table class="gtable"><thead><tr>'
+        + sortableTh("newAdds","t","TICKER") + sortableTh("newAdds","category","GROUP")
+        + sortableTh("newAdds","w","5D") + sortableTh("newAdds","m1","1M") + sortableTh("newAdds","m3","3M")
+        + sortableTh("newAdds","m6","6M") + sortableTh("newAdds","ytd","YTD") + sortableTh("newAdds","y1","1Y")
+        + '</tr></thead><tbody>'
+        + sortRows(naRows, state.sort.newAdds.key, state.sort.newAdds.dir).map(r =>
+            '<tr><td' + tickerClass(r.w, r.m1, r.m2) + '>' + esc(r.t) + '</td>'
+            + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;">' + esc(r.category) + '</td>'
+            + [r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
+            + '</tr>').join('')
+        + '</tbody></table></div>'
+      : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>');
+
   const activeFamily = state.family || "Schwab";
   const foundationBody =
     pillsHTML(FAMILIES, activeFamily, "family")
@@ -1337,6 +1358,7 @@ function render(){
     + sectionHTML("hot","05","Hot Plays", 0, hotBody)
     + sectionHTML("multi","06","Tickers Listed Above Multiple Times", 0, multiBody)
     + sectionHTML("search","07","Search Ticker Against Benchmark", 0, searchBody7)
+    + sectionHTML("newAdds","08","New adds this month", 0, newAddsBody)
     + '<div class="spacer"></div>';
 }
 
@@ -1463,6 +1485,7 @@ async function loadData(force){
         nuclearPlays: j.nuclearPlays || null,
         quantumPlays: j.quantumPlays || null,
         saasPlays: j.saasPlays || null,
+        newAdds: j.newAdds || null,
         miscPlays: j.miscPlays || null,
         oneMonthGainers: j.oneMonthGainers || null,
         multiListed: j.multiListed || null,
