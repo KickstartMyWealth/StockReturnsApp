@@ -477,8 +477,31 @@ function findListings(t){
 }
 
 let _screenerMapCache = null;
+let _searchIndex = null; // [{t, n, nl, type}] — built from search.json for name lookups
+// Primary source: search.json, written by the data refresh and served from this
+// site (stockanalysis.com no longer allows direct browser requests). Falls back
+// to the old live lookup only if search.json can't be loaded.
 async function fetchScreenerMap(){
   if (_screenerMapCache) return _screenerMapCache;
+  try {
+    const res = await fetch("search.json", { cache: "no-cache", signal: AbortSignal.timeout(25000) });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const j = await res.json();
+    const map = {}, idx = [];
+    for (const r of j.d || []){
+      const [t, n, price, day, w, m1, m3, m6, ytd, y1, type] = r;
+      map[t] = { name: n, price, change: day, ch1w: w, ch1m: m1, ch3m: m3, ch6m: m6, chYTD: ytd, ch1y: y1, type };
+      idx.push({ t, n, nl: String(n).toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " "), type });
+    }
+    if (!idx.length) throw new Error("empty index");
+    _searchIndex = idx;
+    _screenerMapCache = map;
+    return map;
+  } catch (e) {
+    return fetchScreenerMapLive();
+  }
+}
+async function fetchScreenerMapLive(){
   // stockanalysis.com allows cross-origin requests directly; going through
   // the CORS proxies here would fail (their size limits reject this ~1-2MB
   // full-market payload), so these bypass fetchWithProxies on purpose.
@@ -636,6 +659,24 @@ async function resolveTickers(query){
     const map = await fetchScreenerMap();
     if (map[guess]) return [{ t: guess, n: map[guess].name || guess, v: map[guess] }];
   }
+  // Company-name lookup against the local index (search.json).
+  const localMap = await fetchScreenerMap();
+  if (_searchIndex){
+    const qn = (SEARCH_ALIASES[qRaw.toLowerCase()] || qRaw).toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+    const toks = qn.split(" ").filter(Boolean);
+    if (!toks.length) throw new Error("not found");
+    const scored = [];
+    for (const e of _searchIndex){
+      if (!toks.every(tk => e.nl.includes(tk))) continue;
+      const rank = e.nl.startsWith(qn) ? 0 : e.nl.split(" ").some(w => w.startsWith(toks[0])) ? 1 : 2;
+      scored.push({ e, s: rank * 10 + (e.type === "s" ? 0 : 5) + Math.min(e.nl.length / 100, 4) });
+    }
+    if (!scored.length) throw new Error("not found");
+    scored.sort((a, b) => a.s - b.s);
+    const anchor = scored[0].e;
+    const pick = anchor.type === "s" ? scored.map(x => x.e).filter(e => e.type === "s" && e.n === anchor.n) : [anchor];
+    return pick.slice(0, 5).map(e => ({ t: e.t, n: e.n, v: localMap[e.t] }));
+  }
   // Otherwise resolve a company name via the search API (also fetched
   // directly for the same reason as fetchScreenerMap above).
   const q = SEARCH_ALIASES[qRaw.toLowerCase()] || qRaw;
@@ -704,7 +745,7 @@ async function performSearch(inputId){
   if (!q || !q.trim()) return;
   state.search.query = q;
   state.search.loading = true; state.search.error = null; state.search.result = null;
-  state.search.chart = null; state.search.chartLoading = false;
+  state.search.chart = null; state.search.pChart = null; state.search.chartLoading = false;
   render();
   let primaryTicker = null;
   try {
@@ -736,6 +777,7 @@ async function performSearch(inputId){
     });
     primaryTicker = list[0] && list[0].t;
     syncFiltersToPrimaryResult();
+    state.search.pChart = buildPeriodChart(state.search.result[0]);
   } catch (e) {
     state.search.error = "Couldn't find that ticker or company. Try the exact ticker symbol.";
   }
@@ -854,6 +896,61 @@ function periodCellClass(w, m1, m2, field){
 // Lightweight custom SVG line chart \u2014 normalized (% change from the
 // start of the window) so a stock's price and an index's price level are
 // directly comparable on the same axis. No charting library needed.
+// Trailing-return comparison chart built entirely from the app's own data:
+// the searched ticker versus the S&P 500, Nasdaq, Russell 2000 and DJIA
+// across 5D / 1M / 3M / 6M / 1Y. Always available; replaced by the daily
+// price-history chart above whenever that live history can be loaded.
+const PERIOD_KEYS = [["w","5D"],["m1","1M"],["m3","3M"],["m6","6M"],["y1","1Y"]];
+function buildPeriodChart(r){
+  if (!r) return null;
+  const mk = (label, color, get) => ({ label, color, vals: PERIOD_KEYS.map(([f, k]) => get(f, k)) });
+  const series = [mk(r.t, CHART_TICKER_COLOR, f => r[f] == null ? null : r[f])];
+  for (const b of BENCHMARKS){
+    const br = state.returns[b.key];
+    if (br) series.push(mk(b.label, b.color, (f, k) => br[k] == null ? null : br[k]));
+  }
+  if (series[0].vals.every(v => v == null)) return null;
+  return { periods: PERIOD_KEYS.map(p => p[1]), series };
+}
+function renderPeriodChartSVG(chart){
+  if (!chart) return "";
+  const { periods, series } = chart;
+  const all = series.flatMap(s => s.vals).filter(v => v != null);
+  const minY = Math.min(...all, 0), maxY = Math.max(...all, 0);
+  const padY = (maxY - minY) * 0.12 || 1;
+  const yLo = minY - padY, yHi = maxY + padY;
+  const W = 640, H = 270, padL = 46, padR = 14, padT = 22, padB = 62;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const n = periods.length;
+  const xFor = i => padL + (n === 1 ? 0 : i / (n - 1)) * plotW;
+  const yFor = v => padT + (1 - (v - yLo) / (yHi - yLo)) * plotH;
+  const txt = 'style="font-family:var(--mono);fill:var(--ink-faint);"';
+  let g = '';
+  for (let k = 0; k <= 4; k++){
+    const v = yLo + (yHi - yLo) * k / 4, y = yFor(v);
+    g += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + y.toFixed(1) + '" y2="' + y.toFixed(1) + '" stroke="currentColor" stroke-opacity="0.12"/>'
+      + '<text x="' + (padL - 6) + '" y="' + (y + 3).toFixed(1) + '" text-anchor="end" font-size="9" ' + txt + '>' + v.toFixed(0) + '%</text>';
+  }
+  const zy = yFor(0);
+  g += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + zy.toFixed(1) + '" y2="' + zy.toFixed(1) + '" stroke="currentColor" stroke-opacity="0.45" stroke-dasharray="3 3"/>';
+  periods.forEach((p, i) => { g += '<text x="' + xFor(i).toFixed(1) + '" y="' + (padT + plotH + 14) + '" text-anchor="middle" font-size="10" ' + txt + '>' + p + '</text>'; });
+  series.forEach((s, si) => {
+    let d = '', started = false;
+    s.vals.forEach((v, i) => { if (v == null) return; d += (started ? 'L' : 'M') + xFor(i).toFixed(1) + ',' + yFor(v).toFixed(1) + ' '; started = true; });
+    const w = si === 0 ? 2.8 : 1.8;
+    g += '<path d="' + d.trim() + '" fill="none" stroke="' + s.color + '" stroke-width="' + w + '" stroke-linejoin="round" stroke-linecap="round"/>';
+    s.vals.forEach((v, i) => { if (v != null) g += '<circle cx="' + xFor(i).toFixed(1) + '" cy="' + yFor(v).toFixed(1) + '" r="' + (si === 0 ? 3.5 : 2.5) + '" fill="' + s.color + '"/>'; });
+  });
+  // Legend
+  let lx = padL, ly = H - 22;
+  series.forEach(s => {
+    g += '<line x1="' + lx + '" x2="' + (lx + 14) + '" y1="' + ly + '" y2="' + ly + '" stroke="' + s.color + '" stroke-width="3"/>'
+      + '<text x="' + (lx + 18) + '" y="' + (ly + 3) + '" font-size="10" ' + txt + '>' + esc(s.label) + '</text>';
+    lx += 26 + s.label.length * 6.4 + 10;
+  });
+  g += '<text x="' + padL + '" y="12" font-size="10" ' + txt + '>TRAILING RETURN BY PERIOD \u00b7 vs benchmarks</text>';
+  return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" role="img" aria-label="Trailing return comparison chart" style="color:var(--ink);max-width:100%;">' + g + '</svg>';
+}
 function renderChartSVG(chart){
   if (!chart) return "";
   const { series, axisDates, asOf } = chart;
@@ -1143,8 +1240,9 @@ function render(){
             + '</tr>').join('')
         + '</tbody></table></div>'
       : '')
-    + (state.search.chartLoading ? '<div class="note" style="margin-top:8px;">Loading 3-month chart\u2026</div>' : '')
-    + (state.search.chart ? '<div style="margin-top:6px;">' + renderChartSVG(state.search.chart) + '</div>' : '');
+    + (state.search.chartLoading ? '<div class="note" style="margin-top:8px;">Checking for daily price history\u2026</div>' : '')
+    + (state.search.chart ? '<div style="margin-top:6px;">' + renderChartSVG(state.search.chart) + '</div>'
+      : state.search.pChart ? '<div style="margin-top:6px;">' + renderPeriodChartSVG(state.search.pChart) + '</div>' : '');
   const searchBody = buildSearchBody("searchInput");
   const searchBody7 = buildSearchBody("searchInput7");
 
