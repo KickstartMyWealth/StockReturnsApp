@@ -458,6 +458,27 @@ async function main() {
     ...hotPlays,
     newAdds,
   };
+  // ---- search.json: compact whole-market lookup for the app's Search sections (03 and 07).
+  // Built here (server side) because browsers can no longer call stockanalysis.com directly.
+  try {
+    let nameMap = {};
+    try {
+      const nj = await fetchJSON("https://stockanalysis.com/_api/endpoints/screener/data-points?type=s&ids=name");
+      nameMap = nj?.data?.data || {};
+    } catch (e) { console.warn("Search names failed:", e.message); }
+    const R2 = x => { const n = Number(x); return Number.isFinite(n) ? +n.toFixed(2) : null; };
+    const seenS = new Set(), searchRows = [];
+    for (const [type, map] of [["s", stockMap], ["e", etfMap]]) {
+      for (const [t, v] of Object.entries(map)) {
+        if (!/^[A-Z][A-Z.]{0,5}$/.test(t) || seenS.has(t) || !Number.isFinite(Number(v.price))) continue;
+        seenS.add(t);
+        searchRows.push([t, (nameMap[t] && nameMap[t].name) || v.name || t, R2(v.price), R2(v.change), R2(v.ch1w), R2(v.ch1m), R2(v.ch3m), R2(v.ch6m), R2(v.chYTD), R2(v.ch1y), type]);
+      }
+    }
+    if (searchRows.length > 100) writeFileSync("search.json", JSON.stringify({ generatedAt: new Date().toISOString(), f: ["t","n","price","day","w","m1","m3","m6","ytd","y1","type"], d: searchRows }));
+    console.log("search.json rows:", searchRows.length);
+  } catch (e) { console.warn("search.json failed:", e.message); }
+
   writeFileSync("data.json", JSON.stringify(payload));
   console.log(`Wrote data.json — ${Object.keys(returns).length} tickers ok, ${failed} failed, club: ${club ? club.length : "unavailable"}, stars: ${starGainers ? starGainers.length : "unavailable"}, green: ${allGreen ? allGreen.length : "unavailable"}, red: ${allRed ? allRed.length : "unavailable"}, oneMonth: ${oneMonthGainers ? oneMonthGainers.length : "unavailable"}, multiListed: ${multiListed ? multiListed.length : "unavailable"}, etf1YClub: ${etf1YClub ? etf1YClub.length : "unavailable"}, stockReturnSelector: ${stockReturnSelector ? stockReturnSelector.length : "unavailable"}`);
   if (Object.keys(returns).length < 10) process.exit(1); // don't commit a broken file
