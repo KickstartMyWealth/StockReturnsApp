@@ -13,7 +13,7 @@ const UNIQUE_TICKERS = [
   "SCHB","SCHX","SCHG","SCHV","SCHM","SCHA","SCHH","SCHF","SCHC","SCHE","SCHP","SCHO","SCHR",
   "VTI","VV","VUG","VTV","VO","VB","VNQ","VEA","VSS","VWO",
   "IWV","IVV","IVW","IVE","IJH","IJR","IYR","EFA","SCZ","EEM","TIP","SHY","IEI",
-  "QQQ","TOPT","SCHD","VOO","VXUS",
+  "QQQ","TOPT","SCHD","SCHY","VOO","VXUS",
   "SPY","IWM","DIA" // benchmarks for the Search section's comparison rows (QQQ already tracked above)
 ];
 
