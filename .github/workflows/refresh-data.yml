@@ -33,7 +33,7 @@ jobs:
         run: |
           git config user.name "market-data-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add data.json search.json
+          git add data.json search.json history.json
           git diff --cached --quiet || git commit -m "Market data $(date -u +%F\ %H:%M) UTC"
           git push
 
