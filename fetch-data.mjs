@@ -482,11 +482,17 @@ async function main() {
 
   // ---- history.json: 1 year of daily closes for tracked tickers + benchmarks, so the app's
   // Search chart can draw a real daily price line from this site (browsers can't call the
-  // price-history sites directly). Rewritten at most every 5 hours to keep the repo small.
+  // price-history sites directly). Rewritten once a day, on the first run after the close
+  // (21:00 UTC or later), since the chart only needs end-of-day prices.
   try {
     let fresh = false;
     if (existsSync("history.json")) {
-      try { const old = JSON.parse(readFileSync("history.json", "utf8")); fresh = Date.now() - new Date(old.generatedAt).getTime() < 5 * 3600 * 1000 && Object.keys(old.d || {}).length > 100; } catch {}
+      try { const old = JSON.parse(readFileSync("history.json", "utf8")); const gen = new Date(old.generatedAt), now = new Date();
+        const todayDone = gen.toISOString().slice(0, 10) === now.toISOString().slice(0, 10) && gen.getUTCHours() >= 21; // written after the close
+        const afterClose = now.getUTCHours() >= 21;
+        const ageDays = (now - gen) / 86400000;
+        // Skip unless: it's after the close and today's copy isn't written yet, or the file is over 3 days old.
+        fresh = Object.keys(old.d || {}).length > 100 && ageDays < 3 && !(afterClose && !todayDone); } catch {}
     }
     if (!fresh && HISTSTORE.SPY) {
       const q = [];
