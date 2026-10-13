@@ -913,17 +913,30 @@ function periodCellClass(w, m1, m2, field){
 // the searched ticker versus the S&P 500, Nasdaq, Russell 2000 and DJIA
 // across 5D / 1M / 3M / 6M / 1Y. Always available; replaced by the daily
 // price-history chart above whenever that live history can be loaded.
-const PERIOD_KEYS = [["w","5D"],["m1","1M"],["m3","3M"],["m6","6M"],["y1","1Y"]];
+// Oldest to newest. Each point is the return from that date up to today, so the
+// line ends at 0% on "Today". x-axis shows the calendar month each period starts.
+const PERIOD_KEYS = [["y1","1Y"],["m6","6M"],["m3","3M"],["m1","1M"],["w","5D"]];
+function periodLabels(){
+  const now = new Date();
+  const mon = d => d.toLocaleString("en-US", { month: "short" });
+  const back = m => { const d = new Date(now); d.setMonth(d.getMonth() - m); return d; };
+  const d1y = back(12), d5 = new Date(now); d5.setDate(d5.getDate() - 5);
+  return [
+    [mon(d1y) + " '" + String(d1y.getFullYear()).slice(2), "1Y"],
+    [mon(back(6)), "6M"], [mon(back(3)), "3M"], [mon(back(1)), "1M"],
+    [mon(d5) + " " + d5.getDate(), "5D"], ["Today", ""]
+  ];
+}
 function buildPeriodChart(r){
   if (!r) return null;
-  const mk = (label, color, get) => ({ label, color, vals: PERIOD_KEYS.map(([f, k]) => get(f, k)) });
+  const mk = (label, color, get) => ({ label, color, vals: PERIOD_KEYS.map(([f, k]) => get(f, k)).concat([0]) });
   const series = [mk(r.t, CHART_TICKER_COLOR, f => r[f] == null ? null : r[f])];
   for (const b of BENCHMARKS){
     const br = state.returns[b.key];
     if (br) series.push(mk(b.label, b.color, (f, k) => br[k] == null ? null : br[k]));
   }
   if (series[0].vals.every(v => v == null)) return null;
-  return { periods: PERIOD_KEYS.map(p => p[1]), series };
+  return { periods: periodLabels(), series };
 }
 function renderPeriodChartSVG(chart){
   if (!chart) return "";
@@ -932,7 +945,7 @@ function renderPeriodChartSVG(chart){
   const minY = Math.min(...all, 0), maxY = Math.max(...all, 0);
   const padY = (maxY - minY) * 0.12 || 1;
   const yLo = minY - padY, yHi = maxY + padY;
-  const W = 640, H = 270, padL = 46, padR = 14, padT = 22, padB = 62;
+  const W = 640, H = 280, padL = 46, padR = 22, padT = 22, padB = 72;
   const plotW = W - padL - padR, plotH = H - padT - padB;
   const n = periods.length;
   const xFor = i => padL + (n === 1 ? 0 : i / (n - 1)) * plotW;
@@ -946,7 +959,8 @@ function renderPeriodChartSVG(chart){
   }
   const zy = yFor(0);
   g += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + zy.toFixed(1) + '" y2="' + zy.toFixed(1) + '" stroke="currentColor" stroke-opacity="0.45" stroke-dasharray="3 3"/>';
-  periods.forEach((p, i) => { g += '<text x="' + xFor(i).toFixed(1) + '" y="' + (padT + plotH + 14) + '" text-anchor="middle" font-size="10" ' + txt + '>' + p + '</text>'; });
+  periods.forEach((p, i) => { g += '<text x="' + xFor(i).toFixed(1) + '" y="' + (padT + plotH + 14) + '" text-anchor="middle" font-size="10" ' + txt + '>' + esc(p[0]) + '</text>'
+    + (p[1] ? '<text x="' + xFor(i).toFixed(1) + '" y="' + (padT + plotH + 26) + '" text-anchor="middle" font-size="8" ' + txt + ' fill-opacity="0.7">' + p[1] + ' ago</text>' : ''); });
   series.forEach((s, si) => {
     let d = '', started = false;
     s.vals.forEach((v, i) => { if (v == null) return; d += (started ? 'L' : 'M') + xFor(i).toFixed(1) + ',' + yFor(v).toFixed(1) + ' '; started = true; });
@@ -961,7 +975,7 @@ function renderPeriodChartSVG(chart){
       + '<text x="' + (lx + 18) + '" y="' + (ly + 3) + '" font-size="10" ' + txt + '>' + esc(s.label) + '</text>';
     lx += 26 + s.label.length * 6.4 + 10;
   });
-  g += '<text x="' + padL + '" y="12" font-size="10" ' + txt + '>TRAILING RETURN BY PERIOD \u00b7 vs benchmarks</text>';
+  g += '<text x="' + padL + '" y="12" font-size="10" ' + txt + '>RETURN SINCE EACH DATE, THROUGH TODAY \u00b7 vs benchmarks</text>';
   return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" role="img" aria-label="Trailing return comparison chart" style="color:var(--ink);max-width:100%;">' + g + '</svg>';
 }
 function renderChartSVG(chart){
