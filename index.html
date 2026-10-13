@@ -1466,7 +1466,7 @@ function render(){
     .filter(r => !state.hotPlaysFilter || r.category === state.hotPlaysFilter)
     .filter(r => matchesMomentumFilter(state.momentumFilter.hot, r.w, r.m1, r.m2));
   const hotCatPills = HOT_CATEGORIES.map(cat =>
-    '<button class="pill'+(state.hotPlaysFilter===cat?' selected':'')+'" data-hot-category="'+esc(cat)+'">'+esc(cat)+'</button>'
+    '<button class="pill'+(state.hotPlaysFilter===cat?' selected':'')+'" data-hot-category="'+esc(cat)+'">'+esc(cat)+' ('+((state[HOT_CATEGORY_KEYS[cat]] || []).length)+')</button>'
   ).join('');
   const hotBody =
     '<div class="note">Human compiled list, could be incorrect. Only stocks 1 Year greater than 30% listed.</div>'
