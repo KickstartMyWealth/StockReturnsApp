@@ -399,6 +399,18 @@ async function main() {
 
   // ---- Hot Plays (section 05): look each hand-picked ticker up in the stock
   // screen, falling back to the ETF screen. Tickers missing from both are skipped.
+  // Healthcare filter is sector-driven: any Misc ticker the screen tags as Healthcare moves
+  // here, so future Misc additions that are healthcare names land in the right button.
+  try {
+    const hc = [];
+    HOT_PLAYS.miscPlays = HOT_PLAYS.miscPlays.filter(t => {
+      const v = stockMap[t];
+      if (v && v.sector === "Healthcare") { hc.push(t); return false; }
+      return true;
+    });
+    HOT_PLAYS.healthcarePlays = [...(HOT_PLAYS.healthcarePlays || []), ...hc];
+    console.log("Healthcare tickers moved out of Misc:", hc.length);
+  } catch (e) { console.warn("Healthcare split failed:", e.message); }
   const hotPlays = {};
   try {
     const RH = x => { const n = Number(x); return Number.isFinite(n) ? +n.toFixed(1) : null; };
@@ -424,7 +436,7 @@ async function main() {
   let newAdds = null;
   try {
     const RH = x => { const n = Number(x); return Number.isFinite(n) ? +n.toFixed(1) : null; };
-    const LABEL = { aiPlays:"AI", miningPlays:"Mining", oilPlays:"Oil", defensePlay:"Defense", cryptoPlays:"Crypto", nuclearPlays:"Nuclear/Energy", quantumPlays:"Quantum", saasPlays:"SaaS", miscPlays:"Misc" };
+    const LABEL = { aiPlays:"AI", miningPlays:"Mining", oilPlays:"Oil", defensePlay:"Defense", cryptoPlays:"Crypto", nuclearPlays:"Nuclear/Energy", quantumPlays:"Quantum", saasPlays:"SaaS", healthcarePlays:"Healthcare", miscPlays:"Misc" };
     const month = Object.keys(NEW_ADDS).sort().pop();
     const rows = [];
     for (const t of NEW_ADDS[month] || []) {
