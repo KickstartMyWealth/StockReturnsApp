@@ -913,69 +913,78 @@ function periodCellClass(w, m1, m2, field){
 // the searched ticker versus the S&P 500, Nasdaq, Russell 2000 and DJIA
 // across 5D / 1M / 3M / 6M / 1Y. Always available; replaced by the daily
 // price-history chart above whenever that live history can be loaded.
-// Oldest to newest. Each point is the return from that date up to today, so the
-// line ends at 0% on "Today". x-axis shows the calendar month each period starts.
+// Rebuilds a 1-year performance line from the period returns we already have
+// (5D / 1M / 3M / 6M / 1Y, each measured to today). A point's value is the gain
+// since the start of the window: (1 + 1Y) / (1 + return from that date) - 1.
+// Points sit at their real calendar positions; the x-axis shows each month.
 const PERIOD_KEYS = [["y1","1Y"],["m6","6M"],["m3","3M"],["m1","1M"],["w","5D"]];
-function periodLabels(){
-  const now = new Date();
-  const mon = d => d.toLocaleString("en-US", { month: "short" });
-  const back = m => { const d = new Date(now); d.setMonth(d.getMonth() - m); return d; };
-  const d1y = back(12), d5 = new Date(now); d5.setDate(d5.getDate() - 5);
-  return [
-    [mon(d1y) + " '" + String(d1y.getFullYear()).slice(2), "1Y"],
-    [mon(back(6)), "6M"], [mon(back(3)), "3M"], [mon(back(1)), "1M"],
-    [mon(d5) + " " + d5.getDate(), "5D"], ["Today", ""]
-  ];
-}
 function buildPeriodChart(r){
   if (!r) return null;
-  const mk = (label, color, get) => ({ label, color, vals: PERIOD_KEYS.map(([f, k]) => get(f, k)).concat([0]) });
+  const now = new Date(), start = new Date(now); start.setFullYear(start.getFullYear() - 1);
+  const span = now - start;
+  const at = d => Math.min(1, Math.max(0, (d - start) / span));
+  const d6 = new Date(now); d6.setMonth(d6.getMonth() - 6);
+  const d3 = new Date(now); d3.setMonth(d3.getMonth() - 3);
+  const d1 = new Date(now); d1.setMonth(d1.getMonth() - 1);
+  const d5 = new Date(now); d5.setDate(d5.getDate() - 5);
+  const pos = [0, at(d6), at(d3), at(d1), at(d5), 1];
+  const mk = (label, color, get) => {
+    const y1 = get("y1", "1Y");
+    if (y1 == null) return { label, color, vals: pos.map(() => null) };
+    const gain = (f, k) => { const v = get(f, k); return v == null ? null : ((1 + y1 / 100) / (1 + v / 100) - 1) * 100; };
+    return { label, color, vals: [0, gain("m6","6M"), gain("m3","3M"), gain("m1","1M"), gain("w","5D"), y1] };
+  };
   const series = [mk(r.t, CHART_TICKER_COLOR, f => r[f] == null ? null : r[f])];
   for (const b of BENCHMARKS){
     const br = state.returns[b.key];
     if (br) series.push(mk(b.label, b.color, (f, k) => br[k] == null ? null : br[k]));
   }
   if (series[0].vals.every(v => v == null)) return null;
-  return { periods: periodLabels(), series };
+  // One label per calendar month, Oct (last year) through this month.
+  const months = [{ f: 0, label: MONTH_ABBR[start.getMonth()] }];
+  const c = new Date(start.getFullYear(), start.getMonth() + 1, 1);
+  while (c <= now){ months.push({ f: at(c), label: MONTH_ABBR[c.getMonth()] }); c.setMonth(c.getMonth() + 1); }
+  return { pos, months, series, asOf: now };
 }
 function renderPeriodChartSVG(chart){
   if (!chart) return "";
-  const { periods, series } = chart;
+  const { pos, months, series } = chart;
   const all = series.flatMap(s => s.vals).filter(v => v != null);
   const minY = Math.min(...all, 0), maxY = Math.max(...all, 0);
   const padY = (maxY - minY) * 0.12 || 1;
   const yLo = minY - padY, yHi = maxY + padY;
-  const W = 640, H = 280, padL = 46, padR = 22, padT = 22, padB = 72;
+  const W = 640, H = 270, padL = 40, padR = 14, padT = 22, padB = 52;
   const plotW = W - padL - padR, plotH = H - padT - padB;
-  const n = periods.length;
-  const xFor = i => padL + (n === 1 ? 0 : i / (n - 1)) * plotW;
+  const xFor = f => padL + f * plotW;
   const yFor = v => padT + (1 - (v - yLo) / (yHi - yLo)) * plotH;
   const txt = 'style="font-family:var(--mono);fill:var(--ink-faint);"';
   let g = '';
   for (let k = 0; k <= 4; k++){
     const v = yLo + (yHi - yLo) * k / 4, y = yFor(v);
     g += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + y.toFixed(1) + '" y2="' + y.toFixed(1) + '" stroke="currentColor" stroke-opacity="0.12"/>'
-      + '<text x="' + (padL - 6) + '" y="' + (y + 3).toFixed(1) + '" text-anchor="end" font-size="9" ' + txt + '>' + v.toFixed(0) + '%</text>';
+      + '<text x="' + (padL - 6) + '" y="' + (y + 3).toFixed(1) + '" text-anchor="end" font-size="9" ' + txt + '>' + (v >= 0 ? '+' : '') + v.toFixed(0) + '%</text>';
   }
   const zy = yFor(0);
   g += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + zy.toFixed(1) + '" y2="' + zy.toFixed(1) + '" stroke="currentColor" stroke-opacity="0.45" stroke-dasharray="3 3"/>';
-  periods.forEach((p, i) => { g += '<text x="' + xFor(i).toFixed(1) + '" y="' + (padT + plotH + 14) + '" text-anchor="middle" font-size="10" ' + txt + '>' + esc(p[0]) + '</text>'
-    + (p[1] ? '<text x="' + xFor(i).toFixed(1) + '" y="' + (padT + plotH + 26) + '" text-anchor="middle" font-size="8" ' + txt + ' fill-opacity="0.7">' + p[1] + ' ago</text>' : ''); });
+  months.forEach(m => {
+    g += '<line x1="' + xFor(m.f).toFixed(1) + '" x2="' + xFor(m.f).toFixed(1) + '" y1="' + (padT + plotH) + '" y2="' + (padT + plotH + 4) + '" stroke="currentColor" stroke-opacity="0.4"/>'
+      + '<text x="' + xFor(m.f).toFixed(1) + '" y="' + (padT + plotH + 16) + '" text-anchor="middle" font-size="9" ' + txt + '>' + esc(m.label) + '</text>';
+  });
   series.forEach((s, si) => {
     let d = '', started = false;
-    s.vals.forEach((v, i) => { if (v == null) return; d += (started ? 'L' : 'M') + xFor(i).toFixed(1) + ',' + yFor(v).toFixed(1) + ' '; started = true; });
-    const w = si === 0 ? 2.8 : 1.8;
-    g += '<path d="' + d.trim() + '" fill="none" stroke="' + s.color + '" stroke-width="' + w + '" stroke-linejoin="round" stroke-linecap="round"/>';
-    s.vals.forEach((v, i) => { if (v != null) g += '<circle cx="' + xFor(i).toFixed(1) + '" cy="' + yFor(v).toFixed(1) + '" r="' + (si === 0 ? 3.5 : 2.5) + '" fill="' + s.color + '"/>'; });
+    s.vals.forEach((v, i) => { if (v == null) return; d += (started ? 'L' : 'M') + xFor(pos[i]).toFixed(1) + ',' + yFor(v).toFixed(1) + ' '; started = true; });
+    g += '<path d="' + d.trim() + '" fill="none" stroke="' + s.color + '" stroke-width="' + (si === 0 ? 2.8 : 1.8) + '" stroke-linejoin="round" stroke-linecap="round"/>';
+    s.vals.forEach((v, i) => { if (v != null) g += '<circle cx="' + xFor(pos[i]).toFixed(1) + '" cy="' + yFor(v).toFixed(1) + '" r="' + (si === 0 ? 3.2 : 2.2) + '" fill="' + s.color + '"/>'; });
   });
-  // Legend
-  let lx = padL, ly = H - 22;
+  let lx = padL, ly = H - 12;
   series.forEach(s => {
+    const last = s.vals[s.vals.length - 1];
+    const lab = s.label + (last == null ? '' : ' ' + (last >= 0 ? '+' : '') + last.toFixed(1) + '%');
     g += '<line x1="' + lx + '" x2="' + (lx + 14) + '" y1="' + ly + '" y2="' + ly + '" stroke="' + s.color + '" stroke-width="3"/>'
-      + '<text x="' + (lx + 18) + '" y="' + (ly + 3) + '" font-size="10" ' + txt + '>' + esc(s.label) + '</text>';
-    lx += 26 + s.label.length * 6.4 + 10;
+      + '<text x="' + (lx + 18) + '" y="' + (ly + 3) + '" font-size="10" ' + txt + '>' + esc(lab) + '</text>';
+    lx += 26 + lab.length * 6.2 + 8;
   });
-  g += '<text x="' + padL + '" y="12" font-size="10" ' + txt + '>RETURN SINCE EACH DATE, THROUGH TODAY \u00b7 vs benchmarks</text>';
+  g += '<text x="' + padL + '" y="12" font-size="10" ' + txt + '>1-YEAR PERFORMANCE VS. BENCHMARKS</text>';
   return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" role="img" aria-label="Trailing return comparison chart" style="color:var(--ink);max-width:100%;">' + g + '</svg>';
 }
 function renderChartSVG(chart){
