@@ -87,9 +87,10 @@ function parseStooqCSV(csv) {
   }
   return out;
 }
+const HISTSTORE = {}; // every ticker's daily history fetched this run, reused to write history.json
 async function history(t) {
-  try { const h = await historyYahoo(t); if (h.length > 20) return h; } catch {}
-  try { const h = parseStooqCSV(await fetchText(STOOQ(t))); if (h.length > 20) return h; } catch {}
+  try { const h = await historyYahoo(t); if (h.length > 20) { HISTSTORE[t] = h; return h; } } catch {}
+  try { const h = parseStooqCSV(await fetchText(STOOQ(t))); if (h.length > 20) { HISTSTORE[t] = h; return h; } } catch {}
   return null;
 }
 
@@ -478,6 +479,33 @@ async function main() {
     if (searchRows.length > 100) writeFileSync("search.json", JSON.stringify({ generatedAt: new Date().toISOString(), f: ["t","n","price","day","w","m1","m3","m6","ytd","y1","type"], d: searchRows }));
     console.log("search.json rows:", searchRows.length);
   } catch (e) { console.warn("search.json failed:", e.message); }
+
+  // ---- history.json: 1 year of daily closes for tracked tickers + benchmarks, so the app's
+  // Search chart can draw a real daily price line from this site (browsers can't call the
+  // price-history sites directly). Rewritten at most every 5 hours to keep the repo small.
+  try {
+    let fresh = false;
+    if (existsSync("history.json")) {
+      try { const old = JSON.parse(readFileSync("history.json", "utf8")); fresh = Date.now() - new Date(old.generatedAt).getTime() < 5 * 3600 * 1000 && Object.keys(old.d || {}).length > 100; } catch {}
+    }
+    if (!fresh && HISTSTORE.SPY) {
+      const q = [];
+      for (const arr of Object.values(HOT_PLAYS)) for (const t of arr) if (!HISTSTORE[t] && !q.includes(t)) q.push(t);
+      await Promise.all(Array.from({ length: 5 }, async () => {
+        while (q.length) { const t = q.shift(); try { await history(t); } catch {} await new Promise(res => setTimeout(res, 150)); }
+      }));
+      const axis = HISTSTORE.SPY.slice(-252).map(p => p.d);
+      const dd = {};
+      for (const [t, h] of Object.entries(HISTSTORE)) {
+        const m = new Map(h.map(p => [p.d, p.c]));
+        let last = null;
+        const arr = axis.map(day => { if (m.has(day)) last = m.get(day); return last == null ? null : +last.toFixed(last < 10 ? 4 : 2); });
+        if (arr.filter(v => v != null).length > 20) dd[t] = arr;
+      }
+      writeFileSync("history.json", JSON.stringify({ generatedAt: new Date().toISOString(), axis, d: dd }));
+      console.log("history.json tickers:", Object.keys(dd).length);
+    }
+  } catch (e) { console.warn("history.json failed:", e.message); }
 
   writeFileSync("data.json", JSON.stringify(payload));
   console.log(`Wrote data.json — ${Object.keys(returns).length} tickers ok, ${failed} failed, club: ${club ? club.length : "unavailable"}, stars: ${starGainers ? starGainers.length : "unavailable"}, green: ${allGreen ? allGreen.length : "unavailable"}, red: ${allRed ? allRed.length : "unavailable"}, oneMonth: ${oneMonthGainers ? oneMonthGainers.length : "unavailable"}, multiListed: ${multiListed ? multiListed.length : "unavailable"}, etf1YClub: ${etf1YClub ? etf1YClub.length : "unavailable"}, stockReturnSelector: ${stockReturnSelector ? stockReturnSelector.length : "unavailable"}`);
