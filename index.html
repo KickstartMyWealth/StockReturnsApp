@@ -1582,13 +1582,13 @@ function render(){
       sectionHTML("foundation","01","Foundation ETFs - Start here, build your base", 0, foundationBody)
     + sectionHTML("all","02","Base ETFs, Country, Sectors", 0, allBody)
     + sectionHTML("returnSelector","03","Stock Return Selector", 0, returnSelectorBody)
-    + sectionHTML("stars","04","Star Gainers", state.selected.stars.size, starsBody)
-    + sectionHTML("hot","05","Hot Plays", 0, hotBody)
-    + sectionHTML("multi","06","Tickers Listed Above Multiple Times", 0, multiBody)
-    + sectionHTML("search","07","Search Ticker Against Benchmark", 0, searchBody7)
-    + sectionHTML("newHighs","08","New Highs this week", nhRows.length, newHighsBody)
-    + sectionHTML("newAdds","09","New adds this month", 0, newAddsBody)
-    + sectionHTML("hearts","10","My Hearts", heartList.length, heartsBody)
+    + sectionHTML("stars","04","Star Gainers", (state.starGainers || []).length, starsBody)
+    + sectionHTML("hot","05","Hot Plays", hotAll.length, hotBody)
+    + sectionHTML("multi","06","Tickers Listed Above Multiple Times", (state.multiListed || []).length, multiBody)
+    + sectionHTML("newHighs","07","New Highs this week", nhRows.length, newHighsBody)
+    + sectionHTML("newAdds","08","New adds this month", naRows.length, newAddsBody)
+    + sectionHTML("hearts","09","My Hearts", heartList.length, heartsBody)
+    + sectionHTML("search","10","Search Ticker Against Benchmark", 0, searchBody7)
     + '<div class="spacer"></div>';
 }
 
