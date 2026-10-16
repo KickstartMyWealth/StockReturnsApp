@@ -452,6 +452,56 @@ async function main() {
     console.warn("New adds failed:", e.message);
   }
 
+  // ---- New Highs this week (section 08): running 7-day list of stocks/ETFs at a new 52-week high.
+  let newHighs = null;
+  try {
+    const todayNH = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+    const cutoff = new Date(Date.now() - 6 * 86400000).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+    let prevNH = {};
+    try {
+      if (existsSync("data.json")) {
+        const p = JSON.parse(readFileSync("data.json", "utf8"));
+        if (p.newHighs && p.newHighs.state) prevNH = p.newHighs.state;
+      }
+    } catch {}
+    const st = {};
+    for (const [t, e] of Object.entries(prevNH)) {
+      const ds = (e.dates || []).filter(d => d >= cutoff);
+      if (ds.length) st[t] = { dates: ds, hi: e.hi, etf: !!e.etf };
+    }
+    const RH = x => { const n = Number(x); return Number.isFinite(n) ? +n.toFixed(1) : null; };
+    const scan = (m, isEtf) => {
+      for (const [t, v] of Object.entries(m)) {
+        const price = Number(v.price), high = Number(v.high52), volume = Number(v.volume);
+        if (!Number.isFinite(price) || !Number.isFinite(high) || price < 1 || high <= 0) continue;
+        if (!Number.isFinite(volume) || volume < MIN_VOLUME) continue;
+        const e = st[t];
+        const isHigh = price >= high * 0.998 || (e && e.hi != null && high > e.hi * 1.0001);
+        if (isHigh) {
+          const x = e || (st[t] = { dates: [], hi: high, etf: isEtf });
+          if (!x.dates.includes(todayNH)) x.dates.push(todayNH);
+          x.hi = Math.max(x.hi || 0, high);
+        }
+      }
+    };
+    scan(stockMap, false);
+    scan(etfMap, true);
+    const rows = [];
+    for (const [t, e] of Object.entries(st)) {
+      const v = e.etf ? etfMap[t] : stockMap[t];
+      if (!v || !Number.isFinite(Number(v.price))) continue;
+      const ds = [...e.dates].sort();
+      rows.push({ t, etf: !!e.etf, sector: v.sector || v.name || null, price: +Number(v.price).toFixed(2),
+        days: ds.length, first: ds[0], last: ds[ds.length - 1],
+        day: RH(v.change), w: RH(v.ch1w), m1: RH(v.ch1m), m3: RH(v.ch3m), m6: RH(v.ch6m), ytd: RH(v.chYTD), y1: RH(v.ch1y) });
+    }
+    rows.sort((a, b) => b.days - a.days || (b.y1 ?? -1e9) - (a.y1 ?? -1e9));
+    newHighs = { asOf: todayNH, total: rows.length, rows: rows.slice(0, 500), state: st };
+    console.log("New Highs this week:", rows.length);
+  } catch (e) {
+    console.warn("New Highs failed:", e.message);
+  }
+
   const dates = Object.values(returns).map(r => r.asOf).sort();
   const payload = {
     generatedAt: new Date().toISOString(),
@@ -470,6 +520,7 @@ async function main() {
     stockReturnSelector,
     ...hotPlays,
     newAdds,
+    newHighs,
   };
   // ---- search.json: compact whole-market lookup for the app's Search sections (03 and 07).
   // Built here (server side) because browsers can no longer call stockanalysis.com directly.
