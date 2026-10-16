@@ -394,7 +394,7 @@ async function fetchAllReturns(onProgress){
  *  STATE
  * ================================================================ */
 const state = {
-  expanded: { newAdds:false, search:false, country:false, sector:false, foundation:false, all:false, returnSelector:false, stars:false, hot:false, multi:false, hearts:false },
+  expanded: { newHighs:false, newAdds:false, search:false, country:false, sector:false, foundation:false, all:false, returnSelector:false, stars:false, hot:false, multi:false, hearts:false },
   selected: { country:new Set(), sector:new Set(), foundation:new Set(), stars:new Set() },
   family: "Schwab",
   timeframe: null,
@@ -409,7 +409,7 @@ const state = {
   allRed: null,        // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
   oneMonthGainers: null, // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
   hotPlaysFilter: null, // "AI" | "Mining" | "Oil" | "Defense" | null (section 05 category filter)
-  aiPlays: null, miningPlays: null, oilPlays: null, defensePlay: null, cryptoPlays: null, nuclearPlays: null, quantumPlays: null, saasPlays: null, healthcarePlays: null, miscPlays: null, newAdds: null, // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
+  aiPlays: null, miningPlays: null, oilPlays: null, defensePlay: null, cryptoPlays: null, nuclearPlays: null, quantumPlays: null, saasPlays: null, healthcarePlays: null, miscPlays: null, newAdds: null, newHighs: null, // [{t, price, w, m1, m3, m6, ytd, y1}] from data.json
   multiListed: null,   // [{t, price, w, m1, m3, m6, ytd, y1, count, inLists}] from data.json
   etf1YClub: null,      // [{t, n, price, day, w, m1, m3, m6, ytd, y1}] from data.json — whole-ETF-market screen
   stockReturnSelector: null, // [{t, sector, price, day, w, m1, m3, m6, ytd, y1}] from data.json — stocks up 30%+ YTD, bucketed on the client
@@ -427,6 +427,7 @@ const state = {
     multi: { key: "count", dir: "desc" },
     hot: { key: "y1", dir: "desc" },
     newAdds: { key: "y1", dir: "desc" },
+    newHighs: { key: "days", dir: "desc" },
     hearts: { key: "t", dir: "asc" },
   },
   searchReturns: {}    // period -> { TICKER: pct } when source === 'search'
@@ -1509,6 +1510,25 @@ function render(){
         + '</tbody></table></div>'
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>');
 
+  const nhRows = (state.newHighs && state.newHighs.rows) || [];
+  const newHighsBody =
+    '<div class="note">Running list for the past 7 days: every stock and ETF that hit a new 52 week high. DAYS shows how many days this week it set a new high. A ticker drops off 7 days after its last new high. The list builds up over the week.</div>'
+    + (nhRows.length
+      ? '<div class="group-label">' + (state.newHighs.total || nhRows.length) + ' AT NEW 52 WEEK HIGHS THIS WEEK' + ((state.newHighs.total || 0) > nhRows.length ? ' \u00b7 TOP ' + nhRows.length + ' SHOWN' : '') + '</div>'
+        + '<div class="gwrap"><table class="gtable"><thead><tr>'
+        + sortableTh("newHighs","t","TICKER") + sortableTh("newHighs","days","DAYS") + sortableTh("newHighs","last","LAST HIGH")
+        + sortableTh("newHighs","day","TODAY","today-col") + sortableTh("newHighs","w","5D") + sortableTh("newHighs","m1","1M") + sortableTh("newHighs","m3","3M")
+        + sortableTh("newHighs","m6","6M") + sortableTh("newHighs","ytd","YTD") + sortableTh("newHighs","y1","1Y")
+        + '</tr></thead><tbody>'
+        + sortRows(nhRows, state.sort.newHighs.key, state.sort.newHighs.dir).map(r =>
+            '<tr><td' + tickerClass(r.w, r.m1, r.m2) + '>' + heartBtn(r.t) + esc(r.t) + '</td>'
+            + '<td style="text-align:center;font-weight:600;">' + r.days + '</td>'
+            + '<td style="text-align:left;color:var(--ink-faint);font-size:10.5px;white-space:nowrap;">' + esc((r.last || '').slice(5)) + '</td>'
+            + pctTd(r.day, 1, 'today-col') + [r.w, r.m1, r.m3, r.m6, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
+            + '</tr>').join('')
+        + '</tbody></table></div>'
+      : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET RUN</div>');
+
   const heartList = [..._hearts];
   if (heartList.some(t => retField(t, "1Y") == null && !(_screenerMapCache && _screenerMapCache[t])) && !_heartFetch){
     _heartFetch = true;
@@ -1566,8 +1586,9 @@ function render(){
     + sectionHTML("hot","05","Hot Plays", 0, hotBody)
     + sectionHTML("multi","06","Tickers Listed Above Multiple Times", 0, multiBody)
     + sectionHTML("search","07","Search Ticker Against Benchmark", 0, searchBody7)
-    + sectionHTML("newAdds","08","New adds this month", 0, newAddsBody)
-    + sectionHTML("hearts","09","My Hearts", heartList.length, heartsBody)
+    + sectionHTML("newHighs","08","New Highs this week", nhRows.length, newHighsBody)
+    + sectionHTML("newAdds","09","New adds this month", 0, newAddsBody)
+    + sectionHTML("hearts","10","My Hearts", heartList.length, heartsBody)
     + '<div class="spacer"></div>';
 }
 
@@ -1702,6 +1723,7 @@ async function loadData(force){
         saasPlays: j.saasPlays || null,
         healthcarePlays: j.healthcarePlays || null,
         newAdds: j.newAdds || null,
+        newHighs: j.newHighs || null,
         miscPlays: j.miscPlays || null,
         oneMonthGainers: j.oneMonthGainers || null,
         multiListed: j.multiListed || null,
