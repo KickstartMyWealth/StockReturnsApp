@@ -995,6 +995,78 @@ function smoothPathD(p){
   }
   return d;
 }
+// ---- Group line chart (section 02): 1-year % change of every ticker in the selected
+// filter (Country / Sector / ETFs), drawn from history.json. Top 5 and bottom 3 are labeled.
+let _histData = null, _histTried = false;
+function originChartHTML(tickers, title){
+  if (!_histData){
+    if (!_histTried){
+      _histTried = true;
+      loadHistoryStore().then(s => { if (s){ _histData = s; render(); } });
+    }
+    return _histTried && _histData === null ? '<div class="note">Loading chart…</div>' : '';
+  }
+  const st = _histData, axis = st.axis, n = axis.length;
+  const lines = [];
+  for (const t of tickers){
+    const arr = st.d[t];
+    if (!arr) continue;
+    let base = null; const pts = [];
+    for (let i = 0; i < n; i++){
+      const c = arr[i];
+      if (c == null) continue;
+      if (base == null) base = c;
+      pts.push([i, (c / base - 1) * 100]);
+    }
+    if (pts.length > 1) lines.push({ t, pts, last: pts[pts.length - 1][1] });
+  }
+  if (!lines.length) return '';
+  const all = lines.flatMap(l => l.pts.map(p => p[1]));
+  const minY = Math.min(...all, 0), maxY = Math.max(...all, 0);
+  const padY = (maxY - minY) * 0.08 || 1;
+  const yLo = minY - padY, yHi = maxY + padY;
+  const W = 640, H = 300, padL = 40, padR = 58, padT = 24, padB = 24;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const xFor = i => padL + (n === 1 ? 0 : i / (n - 1)) * plotW;
+  const yFor = v => padT + (1 - (v - yLo) / (yHi - yLo)) * plotH;
+  const txt = 'style="font-family:var(--mono);fill:var(--ink-faint);"';
+  let g = '';
+  for (let k = 0; k <= 4; k++){
+    const v = yLo + (yHi - yLo) * k / 4, y = yFor(v);
+    g += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + y.toFixed(1) + '" y2="' + y.toFixed(1) + '" stroke="currentColor" stroke-opacity="0.12"/>'
+      + '<text x="' + (padL - 6) + '" y="' + (y + 3).toFixed(1) + '" text-anchor="end" font-size="9" ' + txt + '>' + (v >= 0 ? '+' : '') + v.toFixed(0) + '%</text>';
+  }
+  const zy = yFor(0);
+  g += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + zy.toFixed(1) + '" y2="' + zy.toFixed(1) + '" stroke="currentColor" stroke-opacity="0.45" stroke-dasharray="3 3"/>';
+  let lastMonth = null;
+  axis.forEach((d, i) => {
+    const ym = d.slice(0, 7);
+    if (ym !== lastMonth){
+      lastMonth = ym;
+      g += '<line x1="' + xFor(i).toFixed(1) + '" x2="' + xFor(i).toFixed(1) + '" y1="' + (padT + plotH) + '" y2="' + (padT + plotH + 4) + '" stroke="currentColor" stroke-opacity="0.4"/>'
+        + '<text x="' + xFor(i).toFixed(1) + '" y="' + (padT + plotH + 15) + '" text-anchor="middle" font-size="9" ' + txt + '>' + MONTH_ABBR[parseInt(d.slice(5, 7), 10) - 1] + '</text>';
+    }
+  });
+  const byLast = [...lines].sort((a, b) => a.last - b.last);
+  const labeled = new Set(lines.length <= 8 ? byLast : [...byLast.slice(-5), ...byLast.slice(0, 3)]);
+  for (const l of byLast){ // best lines drawn last, on top
+    const d = l.pts.map((p, i) => (i ? 'L' : 'M') + xFor(p[0]).toFixed(1) + ',' + yFor(p[1]).toFixed(1)).join(' ');
+    const col = l.last >= 0 ? '#2E5C56' : '#8C4A3A';
+    const on = labeled.has(l);
+    g += '<path d="' + d + '" fill="none" stroke="' + col + '" stroke-width="' + (on ? 2 : 1.1) + '" stroke-opacity="' + (on ? 1 : 0.4) + '" stroke-linejoin="round"><title>' + esc(l.t) + ' ' + (l.last >= 0 ? '+' : '') + l.last.toFixed(1) + '%</title></path>';
+  }
+  // End-of-line labels, nudged apart so they don't overlap.
+  const lab = [...labeled].map(l => ({ l, y: yFor(l.last) })).sort((a, b) => a.y - b.y);
+  for (let i = 1; i < lab.length; i++) if (lab[i].y - lab[i - 1].y < 10) lab[i].y = lab[i - 1].y + 10;
+  lab.forEach(o => {
+    const col = o.l.last >= 0 ? '#2E5C56' : '#8C4A3A';
+    g += '<text x="' + (W - padR + 4) + '" y="' + (o.y + 3).toFixed(1) + '" font-size="9" font-weight="600" style="font-family:var(--mono);fill:' + col + ';">' + esc(o.l.t) + ' ' + (o.l.last >= 0 ? '+' : '') + o.l.last.toFixed(0) + '%</text>';
+  });
+  g += '<text x="' + padL + '" y="13" font-size="10" ' + txt + '>' + esc(title.toUpperCase()) + ' · 1-YEAR % CHANGE · ' + lines.length + ' FUNDS</text>';
+  return '<div style="margin:10px 0 14px;"><svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" role="img" aria-label="1-year performance of the selected funds" style="color:var(--ink);max-width:100%;">' + g + '</svg>'
+    + '<div class="note" style="margin-top:2px;">Top 5 and bottom 3 are labeled. Tap or hover a line to see its ticker.</div></div>';
+}
+
 function renderPeriodChartSVG(chart){
   if (!chart) return "";
   const { pos, months, series } = chart;
@@ -1253,6 +1325,7 @@ function render(){
     + originBody
     + momentumPillsHTML("all", state.momentumFilter.all)
     + '<div class="note">Country, sector, and foundation ETFs. Default sort is by 1Y return \u2014 tap any column to sort by it instead, or a filter above to narrow by type.</div>'
+    + (state.originFilter && baseRows.length ? originChartHTML(baseRows.map(r => r.t), state.originFilter) : '')
     + '<div class="gwrap"><table class="gtable"><thead><tr>'
       + sortableTh("all","t","TICKER") + sortableTh("all","n","NAME")
       + sortableTh("all","day","TODAY","today-col") + sortableTh("all","w","5D") + sortableTh("all","m1","1M")
