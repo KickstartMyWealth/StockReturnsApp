@@ -1445,7 +1445,7 @@ function render(){
       ? '<div class="group-label">' + freshnessLabel() + '</div>'
       : '<div class="group-label" style="color:var(--rust)">AWAITING FIRST MARKET-CLOSE RUN</div>')
     + momentumPillsHTML("multi", state.momentumFilter.multi)
-    + '<div class="note">Stocks showing up in 2 or more of: The 100%+ Club, Star Gainers, All Green, 1 Month Gainers, New Highs this week, and New adds this month. Independent bullish signals lining up on the same ticker \u2014 sorted by how many lists it\u2019s in, then 1-year return.</div>'
+    + '<div class="note">Stocks showing up in 2 or more of: The 100%+ Club, Star Gainers, All Green, 1 Month Gainers, New Highs this week, and New adds this month. Independent bullish signals lining up on the same ticker \u2014 sorted by how many lists it\u2019s in, then 1-year return. Capped at the top 50.</div>'
     + (multiRows.length
       ? '<div class="gwrap"><table class="gtable"><thead><tr>'
         + sortableTh("multi","t","TICKER") + sortableTh("multi","sector","SECTOR")
