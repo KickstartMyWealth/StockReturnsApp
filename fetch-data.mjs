@@ -175,6 +175,7 @@ async function main() {
   // ---- Whole-market screen: 100%+ Club and Star Gainers in one call ----
   let stockMap = {};
   let club = null, clubSource = null, starGainers = null, starsState = null, allGreen = null, allRed = null, oneMonthGainers = null, multiListed = null, stockReturnSelector = null;
+  const _tc = {}, _td = {}; // multi-list membership, extended later with New Highs / New adds
   try {
     const j = await fetchJSON(SCREEN_URL);
     const map = j?.data?.data || {};
@@ -344,7 +345,7 @@ async function main() {
     // than any single list on its own.
     const CATS = { club: club || [], stars: starGainers || [], green: allGreen || [], month1: oneMonthGainers || [] };
     const CAT_LABEL = { club: "YTD", stars: "Stars", green: "Green", month1: "1M" };
-    const tickerCats = {}, tickerData = {};
+    const tickerCats = _tc, tickerData = _td;
     for (const [cat, rows] of Object.entries(CATS)) {
       for (const r of rows) {
         if (!tickerCats[r.t]) tickerCats[r.t] = new Set();
@@ -500,6 +501,27 @@ async function main() {
     console.log("New Highs this week:", rows.length);
   } catch (e) {
     console.warn("New Highs failed:", e.message);
+  }
+
+  // ---- Fold section 07 (New Highs) and 08 (New adds) into "Tickers Listed Above Multiple Times".
+  try {
+    const LBL = { club: "YTD", stars: "Stars", green: "Green", month1: "1M", highs: "Highs", adds: "Adds" };
+    for (const [cat, src] of [["highs", newHighs && newHighs.rows], ["adds", newAdds && newAdds.rows]]) {
+      for (const r of src || []) {
+        if (!_tc[r.t]) _tc[r.t] = new Set();
+        _tc[r.t].add(cat);
+        if (!_td[r.t]) _td[r.t] = r;
+      }
+    }
+    const merged = Object.entries(_tc)
+      .filter(([t, cats]) => cats.size >= 2)
+      .map(([t, cats]) => ({ ..._td[t], t, count: cats.size, inLists: [...cats].map(c => LBL[c]).join(", ") }))
+      .sort((a, b) => b.count - a.count || (b.y1 ?? -1e9) - (a.y1 ?? -1e9))
+      .slice(0, 50);
+    await attachExtraReturns([merged.filter(r => r.m2 == null)]);
+    multiListed = merged.length ? merged : null;
+  } catch (e) {
+    console.warn("Multi-list merge failed:", e.message);
   }
 
   const dates = Object.values(returns).map(r => r.asOf).sort();
