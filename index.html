@@ -1659,6 +1659,9 @@ function render(){
     + '<div class="group-label">' + freshnessLabel() + '</div>'
     + momentumPillsHTML("foundation", state.momentumFilter.foundation)
     + '<div class="note">Returns for each core ' + esc(activeFamily) + ' fund, by asset class.</div>'
+    + originChartHTML(familyList(activeFamily)
+        .filter(r => matchesMomentumFilter(state.momentumFilter.foundation, retField(r.t,"5D"), retField(r.t,"1M"), retField(r.t,"2M")))
+        .map(r => r.t), activeFamily + ' funds')
     + FOUNDATION_GROUPS.map(g => {
         const rows = familyList(activeFamily).filter(r => r.group === g)
           .filter(r => matchesMomentumFilter(state.momentumFilter.foundation, retField(r.t,"5D"), retField(r.t,"1M"), retField(r.t,"2M")));
