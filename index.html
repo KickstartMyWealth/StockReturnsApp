@@ -477,6 +477,11 @@ function findListings(t){
   if (inArr(state.starGainers)) labels.push("Star Gainers");
   if (inArr(state.allGreen)) labels.push("All Green");
   if (inArr(state.oneMonthGainers)) labels.push("1 Month Gainers");
+  for (const cat of Object.keys(HOT_CATEGORY_KEYS)) {
+    if (inArr(state[HOT_CATEGORY_KEYS[cat]])) labels.push("Hot Plays: " + cat);
+  }
+  if (state.newHighs && inArr(state.newHighs.rows)) labels.push("New Highs");
+  if (state.newAdds && inArr(state.newAdds.rows)) labels.push("New Adds");
   return labels;
 }
 
