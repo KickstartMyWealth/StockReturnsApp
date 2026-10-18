@@ -1079,9 +1079,9 @@ function originChartHTML(tickers, title){
   lab.forEach(o => {
     g += '<text x="' + (W - padR + 4) + '" y="' + (o.y + 3).toFixed(1) + '" font-size="9" font-weight="600" style="font-family:var(--mono);fill:' + o.col + ';">' + esc(o.txt) + '</text>';
   });
-  g += '<text x="' + padL + '" y="13" font-size="10" ' + txt + '>' + esc(title.toUpperCase()) + ' · 1-YEAR % CHANGE · ' + lines.length + ' FUNDS</text>';
+  g += '<text x="' + padL + '" y="13" font-size="10" ' + txt + '>' + esc(title.toUpperCase()) + ' · 1-YEAR % CHANGE · ' + lines.length + ' TICKERS</text>';
   return '<div style="margin:10px 0 14px;"><svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" role="img" aria-label="1-year performance of the selected funds" style="color:var(--ink);max-width:100%;">' + g + '</svg>'
-    + '<div class="note" style="margin-top:2px;">Blue lines are the benchmarks: SPY (S&amp;P 500), QQQ (Nasdaq), IWM (Russell 2000) and DIA (DJIA). Top 5 and bottom 3 funds are labeled. Tap or hover a line to see its ticker.</div></div>';
+    + '<div class="note" style="margin-top:2px;">Blue lines are the benchmarks: SPY (S&amp;P 500), QQQ (Nasdaq), IWM (Russell 2000) and DIA (DJIA). Top 5 and bottom 3 are labeled. Tap or hover a line to see its ticker.</div></div>';
 }
 
 function renderPeriodChartSVG(chart){
@@ -1639,6 +1639,7 @@ function render(){
   });
   const heartsBody =
     '<div class="note">Hearts are only saved on this device</div>'
+    + (heartRows.length ? originChartHTML(heartList, 'My hearts') : '')
     + (heartRows.length
       ? '<div class="gwrap"><table class="gtable"><thead><tr>'
         + sortableTh("hearts","t","TICKER") + sortableTh("hearts","n","NAME")
