@@ -1075,13 +1075,18 @@ function originChartHTML(tickers, title, plainTitle){
   const lab = [...labeled].map(l => ({ l, y: yFor(l.last), col: l.last >= 0 ? '#2E5C56' : '#8C4A3A', txt: l.t + ' ' + (l.last >= 0 ? '+' : '') + l.last.toFixed(0) + '%' }))
     .concat(bench.map(b => ({ l: b, y: yFor(b.last), col: b.color, txt: b.t + ' ' + (b.last >= 0 ? '+' : '') + b.last.toFixed(0) + '%' })))
     .sort((a, b) => a.y - b.y);
-  for (let i = 1; i < lab.length; i++) if (lab[i].y - lab[i - 1].y < 10) lab[i].y = lab[i - 1].y + 10;
+  const yTop = 16, yBot = H - 8, gap = 10;
+  for (let i = 0; i < lab.length; i++) lab[i].y = Math.max(lab[i].y, i ? lab[i - 1].y + gap : yTop);
+  if (lab.length && lab[lab.length - 1].y > yBot){ // keep every label inside the chart; push the stack back up
+    lab[lab.length - 1].y = yBot;
+    for (let i = lab.length - 2; i >= 0; i--) lab[i].y = Math.min(lab[i].y, lab[i + 1].y - gap);
+  }
   lab.forEach(o => {
     g += '<text x="' + (W - padR + 4) + '" y="' + (o.y + 3).toFixed(1) + '" font-size="9" font-weight="600" style="font-family:var(--mono);fill:' + o.col + ';">' + esc(o.txt) + '</text>';
   });
   g += '<text x="' + padL + '" y="13" font-size="10" ' + txt + '>' + esc(title.toUpperCase()) + (plainTitle ? '' : ' · 1-YEAR % CHANGE · ' + lines.length + ' TICKERS') + '</text>';
   return '<div style="margin:10px 0 14px;"><svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" role="img" aria-label="1-year performance of the selected funds" style="color:var(--ink);max-width:100%;">' + g + '</svg>'
-    + '<div class="note" style="margin-top:2px;">Blue lines are the benchmarks: SPY (S&amp;P 500), QQQ (Nasdaq), IWM (Russell 2000) and DIA (DJIA). Top 5 and bottom 3 are labeled. Tap or hover a line to see its ticker.</div></div>';
+    + '<div class="note" style="margin-top:2px;">Blue lines are the benchmarks: SPY (S&amp;P 500), QQQ (Nasdaq), IWM (Russell 2000) and DIA (DJIA). Top 5 and bottom 3 are labeled.</div></div>';
 }
 
 function renderPeriodChartSVG(chart){
