@@ -414,7 +414,7 @@ const state = {
   etf1YClub: null,      // [{t, n, price, day, w, m1, m3, m6, ytd, y1}] from data.json — whole-ETF-market screen
   stockReturnSelector: null, // [{t, sector, price, day, w, m1, m3, m6, ytd, y1}] from data.json — stocks up 30%+ YTD, bucketed on the client
   search: { query: "", loading: false, error: null, result: null, chart: null, chartLoading: false },
-  originFilter: null,   // "Country" | "Sector" | "ETFs" | null (section 01 origin filter)
+  originFilter: "Sector",   // "Country" | "Sector" | "ETFs" | null (section 01 origin filter)
   returnBucketFilter: null, // "30-50%" | "50-75%" | "75-100%" | "100%+" | null (section 03 bucket filter)
   returnSelectorCategoryFilters: new Set(), // subset of "etfs"/"leveraged"/"green"/"month1" — section 03's category filters, AND'd together when more than one is selected; empty merges stocks + ETFs + All Green + 1M Gainers stocks, deduped by ticker (default)
   returnSelectorSectorFilter: null, // null | a GICS sector string — section 03's sector filter (ETF rows have no sector, so they're excluded whenever a sector is picked)
