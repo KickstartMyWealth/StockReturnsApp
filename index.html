@@ -67,6 +67,11 @@
   .group-label { font-family:var(--mono); font-size:10px; color:var(--teal); letter-spacing:1.5px; padding:10px 0 2px; }
   .heart { font-size:14px; line-height:1; padding:2px 6px 2px 0; margin:0; border:none; background:none; color:var(--ink-faint); cursor:pointer; vertical-align:middle; }
   .heart.on { color:#DC2626; }
+  .chartbtn { font-family:var(--mono); font-size:8.5px; line-height:1; padding:3px 5px; margin:0 6px 0 0; border:1px solid var(--line); border-radius:4px; background:none; color:var(--teal); cursor:pointer; vertical-align:middle; }
+  .chart-modal { position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center; padding:12px; }
+  .chart-backdrop { position:absolute; inset:0; background:rgba(27,36,32,0.55); }
+  .chart-panel { position:relative; background:var(--paper); border:1px solid var(--line); border-radius:12px; padding:12px; width:100%; max-width:760px; max-height:92vh; overflow:auto; }
+  .chart-head { display:flex; justify-content:space-between; align-items:center; font-family:var(--display); font-weight:600; font-size:16px; margin-bottom:4px; }
   .note { font-size:11px; color:var(--ink-faint); padding-bottom:8px; }
   .note.warn { color:var(--rust); }
 
@@ -414,6 +419,7 @@ const state = {
   etf1YClub: null,      // [{t, n, price, day, w, m1, m3, m6, ytd, y1}] from data.json — whole-ETF-market screen
   stockReturnSelector: null, // [{t, sector, price, day, w, m1, m3, m6, ytd, y1}] from data.json — stocks up 30%+ YTD, bucketed on the client
   search: { query: "", loading: false, error: null, result: null, chart: null, chartLoading: false },
+  chartTicker: null,
   originFilter: "Sector",   // "Country" | "Sector" | "ETFs" | null (section 01 origin filter)
   returnBucketFilter: null, // "30-50%" | "50-75%" | "75-100%" | "100%+" | null (section 03 bucket filter)
   returnSelectorCategoryFilters: new Set(), // subset of "etfs"/"leveraged"/"green"/"month1" — section 03's category filters, AND'd together when more than one is selected; empty merges stocks + ETFs + All Green + 1M Gainers stocks, deduped by ticker (default)
@@ -896,7 +902,24 @@ function pctTd(v, decimals, extraClass){
 const HEARTS_KEY = "ksmw_hearts_v1";
 let _hearts = (function(){ try { return new Set(JSON.parse(localStorage.getItem(HEARTS_KEY) || "[]")); } catch(e){ return new Set(); } })();
 function saveHearts(){ try { localStorage.setItem(HEARTS_KEY, JSON.stringify([..._hearts])); } catch(e){} }
-function heartBtn(t){
+function chartBtn(t){
+  return '<button class="chartbtn" data-action="chart" data-t="' + esc(t) + '" aria-label="Chart ' + esc(t) + '">Chart</button>';
+}
+function chartModalHTML(){
+  const t = state.chartTicker;
+  if (!t) return '';
+  let chart = originChartHTML([t], t + ' Against Benchmarks', true);
+  if (!chart){
+    const g = k => retField(t, k);
+    const pc = buildPeriodChart({ t, w: g("5D"), m1: g("1M"), m3: g("3M"), m6: g("6M"), y1: g("1Y") });
+    chart = pc ? '<div style="margin:10px 0;">' + renderPeriodChartSVG(pc) + '</div>' : '<div class="note">No chart data available for ' + esc(t) + '.</div>';
+  }
+  return '<div class="chart-modal"><div class="chart-backdrop" data-action="chartClose"></div><div class="chart-panel">'
+    + '<div class="chart-head"><span>' + esc(t) + '</span><button class="chartbtn" data-action="chartClose" style="margin:0;font-size:10px;padding:4px 8px;">Close \u2715</button></div>'
+    + chart + '</div></div>';
+}
+function heartBtn(t){ return heartOnlyBtn(t) + chartBtn(t); }
+function heartOnlyBtn(t){
   const on = _hearts.has(t);
   return '<button class="heart' + (on ? ' on' : '') + '" data-action="heart" data-t="' + esc(t) + '" aria-pressed="' + on + '" aria-label="' + (on ? 'Remove ' : 'Heart ') + esc(t) + '">' + (on ? '\u2665' : '\u2661') + '</button>';
 }
@@ -1673,7 +1696,7 @@ function render(){
           .filter(r => matchesMomentumFilter(state.momentumFilter.foundation, retField(r.t,"5D"), retField(r.t,"1M"), retField(r.t,"2M")));
         if (!rows.length) return '';
         return '<div class="group-label">' + esc(g.toUpperCase()) + '</div>'
-          + '<div class="gwrap"><table class="gtable" style="table-layout:fixed;"><thead><tr><th style="width:66px;">TICKER</th><th style="width:130px;">NAME</th><th class="today-col">TODAY</th><th>5D</th><th>1M</th><th>2M</th><th>3M</th><th>6M</th><th>9M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
+          + '<div class="gwrap"><table class="gtable" style="table-layout:fixed;"><thead><tr><th style="width:112px;">TICKER</th><th style="width:130px;">NAME</th><th class="today-col">TODAY</th><th>5D</th><th>1M</th><th>2M</th><th>3M</th><th>6M</th><th>9M</th><th>YTD</th><th>1Y</th></tr></thead><tbody>'
           + rows.map(r =>
               '<tr><td' + tickerClass(retField(r.t,"5D"), retField(r.t,"1M"), retField(r.t,"2M")) + '>' + heartBtn(r.t) + esc(r.t) + '</td>'
               + '<td title="' + esc(r.n) + '" style="text-align:left;color:var(--ink-faint);font-size:10.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(r.n) + '</td>'
@@ -1693,7 +1716,8 @@ function render(){
     + sectionHTML("multi","08","Tickers Listed Above Multiple Times", (state.multiListed || []).length, multiBody)
     + sectionHTML("hearts","09","My Hearts", heartList.length, heartsBody)
     + sectionHTML("search","10","Search Ticker Against Benchmark", 0, searchBody7)
-    + '<div class="spacer"></div>';
+    + '<div class="spacer"></div>'
+    + chartModalHTML();
 }
 
 /* ================================================================ *
@@ -1708,6 +1732,8 @@ document.addEventListener("click", e => {
     render(); return;
   }
   const a = el.dataset.action;
+  if (a === "chart"){ state.chartTicker = el.dataset.t; render(); return; }
+  if (a === "chartClose"){ state.chartTicker = null; render(); return; }
   if (a === "heart"){
     const ht = el.dataset.t;
     if (_hearts.has(ht)) _hearts.delete(ht); else _hearts.add(ht);
