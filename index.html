@@ -116,6 +116,7 @@
   .gtable td.hc { white-space:nowrap; text-align:left; padding-right:2px; }
   .gtable td.tk { text-align:left; color:var(--ink); font-size:12px; letter-spacing:0.5px; }
   .gtable th.co { text-align:left; }
+  .cmp { width:14px; height:14px; margin:0 5px 0 0; vertical-align:middle; accent-color:var(--teal); cursor:pointer; }
   .gtable td.co { text-align:left; color:var(--ink-faint); font-size:10.5px; max-width:110px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; letter-spacing:0; }
   .gtable td.pos { color:var(--teal); }
   .gtable td.neg { color:var(--rust); }
@@ -451,6 +452,7 @@ const state = {
   stockReturnSelector: null, // [{t, sector, price, day, w, m1, m3, m6, ytd, y1}] from data.json — stocks up 30%+ YTD, bucketed on the client
   search: { query: "", loading: false, error: null, result: null, chart: null, chartLoading: false },
   chartTicker: null,
+  compare: [],
   originFilter: "Sector",   // "Country" | "Sector" | "ETFs" | null (section 01 origin filter)
   returnBucketFilter: null, // "30-50%" | "50-75%" | "75-100%" | "100%+" | null (section 03 bucket filter)
   returnSelectorCategoryFilters: new Set(), // subset of "etfs"/"leveraged"/"green"/"month1" — section 03's category filters, AND'd together when more than one is selected; empty merges stocks + ETFs + All Green + 1M Gainers stocks, deduped by ticker (default)
@@ -948,6 +950,9 @@ function chartModalHTML(){
   return '<div class="chart-modal"><div class="chart-backdrop" data-action="chartClose"></div><div class="chart-panel">'
     + '<div class="chart-head"><span>' + esc(t) + '</span><button class="chartbtn" data-action="chartClose" style="margin:0;font-size:10px;padding:4px 8px;">Close \u2715</button></div>'
     + chart + '</div></div>';
+}
+function cmpBox(t){
+  return '<input type="checkbox" class="cmp" data-action="cmp" data-t="' + esc(t) + '"' + (state.compare.includes(t) ? ' checked' : '') + ' aria-label="Compare ' + esc(t) + '">';
 }
 function heartBtn(t){ return heartOnlyBtn(t) + chartBtn(t); }
 function heartOnlyBtn(t){
@@ -1698,7 +1703,7 @@ function render(){
   });
   const heartsBody =
     '<div class="note">Hearts are only saved on this device</div>'
-    + (heartRows.length ? originChartHTML(heartList, 'My Hearts Against Benchmarks', true) : '')
+    + (heartRows.length ? '<div class="note">Check the boxes to compare only those tickers on the chart. With none checked, all your hearts are shown.' + (state.compare.some(t => heartList.includes(t)) ? ' <button class="chartbtn" data-action="cmpClear" style="margin:0 0 0 6px;">Clear selection</button>' : '') + '</div>' + originChartHTML((state.compare.some(t => heartList.includes(t)) ? heartList.filter(t => state.compare.includes(t)) : heartList), (state.compare.some(t => heartList.includes(t)) ? 'Selected Hearts' : 'My Hearts') + ' Against Benchmarks', true) : '')
     + (heartRows.length
       ? '<div class="gwrap"><table class="gtable"><thead><tr>'
         + sortableTh("hearts","t","TICKER") + sortableTh("hearts","n","NAME")
@@ -1706,7 +1711,7 @@ function render(){
         + sortableTh("hearts","m2","2M") + sortableTh("hearts","m3","3M") + sortableTh("hearts","m6","6M") + sortableTh("hearts","m9","9M") + sortableTh("hearts","ytd","YTD") + sortableTh("hearts","y1","1Y")
         + '</tr></thead><tbody>'
         + sortRows(heartRows, state.sort.hearts.key, state.sort.hearts.dir).map(r =>
-            '<tr><td' + tickerClass(r.w, r.m1, r.m2) + '>' + heartBtn(r.t) + esc(r.t) + '</td>'
+            '<tr><td' + tickerClass(r.w, r.m1, r.m2) + '>' + cmpBox(r.t) + heartBtn(r.t) + esc(r.t) + '</td>'
             + '<td title="' + esc(r.n) + '" style="text-align:left;color:var(--ink-faint);font-size:10.5px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(r.n) + '</td>'
             + pctTd(r.day, 1, 'today-col') + pctTd(r.w, 1, periodCellClass(r.w, r.m1, r.m2, 'w')) + pctTd(r.m1, 1, periodCellClass(r.w, r.m1, r.m2, 'm1')) + pctTd(r.m2, 1, periodCellClass(r.w, r.m1, r.m2, 'm2')) + [r.m3, r.m6, r.m9, r.ytd, r.y1].map(v => pctTd(v, 1)).join('')
             + '</tr>').join('')
@@ -1764,6 +1769,8 @@ document.addEventListener("click", e => {
   }
   const a = el.dataset.action;
   if (a === "chart"){ state.chartTicker = el.dataset.t; render(); return; }
+  if (a === "cmp"){ const ct = el.dataset.t; state.compare = state.compare.includes(ct) ? state.compare.filter(x => x !== ct) : state.compare.concat(ct); render(); return; }
+  if (a === "cmpClear"){ state.compare = []; render(); return; }
   if (a === "chartClose"){ state.chartTicker = null; render(); return; }
   if (a === "heart"){
     const ht = el.dataset.t;
@@ -1970,6 +1977,7 @@ function decorateCompanyCols(){
     const fixed = tb.style.tableLayout === "fixed";
     const thHC = document.createElement("th");
     thHC.style.cssText = "width:78px;";
+    if (tb.querySelector(".cmp")) thHC.style.cssText = "width:98px;";
     let thCo = nameIdx > 0 ? ths[nameIdx] : document.createElement("th");
     if (nameIdx < 0) thCo.textContent = "COMPANY";
     thCo.classList.add("co");
@@ -1979,7 +1987,7 @@ function decorateCompanyCols(){
     if (tb.tBodies[0]) [...tb.tBodies[0].rows].forEach(tr => {
       const td0 = tr.cells[0];
       if (!td0) return;
-      const btns = td0.querySelectorAll(".heart, .chartbtn");
+      const btns = td0.querySelectorAll(".cmp, .heart, .chartbtn");
       if (!btns.length){ if (td0.colSpan > 1) td0.colSpan += 2; return; }
       const tkr = btns[0].dataset.t;
       const tdHC = document.createElement("td");
