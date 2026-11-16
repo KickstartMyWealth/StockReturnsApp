@@ -11,7 +11,7 @@ const UNIQUE_TICKERS = [
   "EWM","KSA","QAT","UAE",
   "XLK","XLF","XLE","XLV","XLY","XLP","XLI","XLU","XLB","XLRE","XLC","GLD","SLV",
   "SCHB","SCHX","SCHG","SCHV","SCHM","SCHA","SCHH","SCHF","SCHC","SCHE","SCHP","SCHO","SCHR",
-  "VTI","VV","VUG","VTV","VO","VB","VNQ","VEA","VSS","VWO", "VXF","VOE","VBR","VOT","VBK", "VGT","VFH","VDE","VHT","VCR","VDC","VIS","VPU","VAW","VOX", "VIG","HDV","USMV","IEFA","IEMG","SCHZ","BND","AGG",
+  "VTI","VV","VUG","VTV","VO","VB","VNQ","VEA","VSS","VWO", "VXF","VOE","VBR","VOT","VBK", "KBE","KCE","KIE","MTK","SDY","XAR","XHB","XWEB","XME","XES","XOP","XPH","XRT","XSD","XSW","XTH","XTL", "VGT","VFH","VDE","VHT","VCR","VDC","VIS","VPU","VAW","VOX", "VIG","HDV","USMV","IEFA","IEMG","SCHZ","BND","AGG",
   "IWV","IVV","IVW","IVE","IJH","IJR","IYR","EFA","SCZ","EEM","TIP","SHY","IEI",
   "QQQ","TOPT","SCHD","SCHY","VOO","VXUS",
   "SPY","IWM","DIA" // benchmarks for the Search section's comparison rows (QQQ already tracked above)
