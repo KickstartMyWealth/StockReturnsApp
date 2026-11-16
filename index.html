@@ -218,7 +218,24 @@ const SECTOR_ETFS = [
   {t:"VHT",n:"Health Care (Vanguard)"},{t:"VCR",n:"Consumer Discretionary (Vanguard)"},{t:"VDC",n:"Consumer Staples (Vanguard)"},
   {t:"VIS",n:"Industrials (Vanguard)"},{t:"VPU",n:"Utilities (Vanguard)"},{t:"VAW",n:"Materials (Vanguard)"},
   {t:"VOX",n:"Communication Services (Vanguard)"},
-  {t:"GLD",n:"Gold"},{t:"SLV",n:"Silver"} // commodity trackers, not GICS sectors, included alongside for convenience
+  {t:"KBE",n:"Bank (SPDR)"},
+  {t:"KCE",n:"Capital Markets (SPDR)"},
+  {t:"KIE",n:"Insurance (SPDR)"},
+  {t:"MTK",n:"Morgan Stanley Technology (SPDR)"},
+  {t:"SDY",n:"Dividend (SPDR)"},
+  {t:"XAR",n:"Aerospace & Defense (SPDR)"},
+  {t:"XHB",n:"Homebuilders (SPDR)"},
+  {t:"XWEB",n:"Internet (SPDR)"},
+  {t:"XME",n:"Metals & Mining (SPDR)"},
+  {t:"XES",n:"Oil & Gas Equipment & Services (SPDR)"},
+  {t:"XOP",n:"Oil & Gas Exploration & Production (SPDR)"},
+  {t:"XPH",n:"Pharmaceuticals (SPDR)"},
+  {t:"XRT",n:"Retail (SPDR)"},
+  {t:"XSD",n:"Semiconductor (SPDR)"},
+  {t:"XSW",n:"Software & Services (SPDR)"},
+  {t:"XTH",n:"Technology Hardware (SPDR)"},
+  {t:"XTL",n:"Telecom (SPDR)"},
+    {t:"GLD",n:"Gold"},{t:"SLV",n:"Silver"} // commodity trackers, not GICS sectors, included alongside for convenience
 ];
 
 const FAMILIES = ["Schwab","Vanguard","iShares"];
@@ -1264,7 +1281,7 @@ function sectionHTML(key, index, title, count, bodyHTML){
 
 function pillsHTML(items, selectedLabel, action){
   return '<div class="pills">' + items.map(l =>
-    '<button class="pill'+(l===selectedLabel?' selected':'')+'" data-action="'+action+'" data-v="'+esc(l)+'">'+esc(l)+'</button>'
+    '<button class="pill'+(l===selectedLabel?' selected':'')+'" data-action="'+action+'" data-v="'+esc(l)+'">'+(action==="originFilter"&&l==="ETFs"?"01 ETFs sorted":esc(l))+'</button>'
   ).join('') + '</div>';
 }
 
